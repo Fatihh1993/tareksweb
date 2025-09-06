@@ -5,12 +5,7 @@
   --foreground: #171717;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+/* @theme inline removed: this at-rule is not supported by the project's CSS linter/tooling */
 
 @media (prefers-color-scheme: dark) {
   :root {
@@ -64,7 +59,7 @@ body, html {
 
 /* Ensure sider keeps intended blue when used */
 .ant-layout-sider {
-  background: #2563eb !important;
+  background: rgb(33,79,115) !important;
 }
 
 /* Prevent very wide table overflow from producing visible dark bands */
@@ -155,3 +150,98 @@ main, main > section, #__next > main {
   background: #fff;
   overflow: auto;
 }
+
+/* Modern, minimal sidebar styles used by Tareks page */
+.tareks-sider {
+  font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: rgb(33,79,115) !important;
+  color: #ffffff !important;
+}
+.tareks-sider .sider-brand {
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  font-size: 14px;
+}
+.tareks-sider .sider-logo {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.04);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.05) inset;
+}
+.tareks-sider .section-title {
+  font-size: 13px;
+  color: rgba(255,255,255,0.95);
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0.4px;
+  margin-left: 6px;
+}
+.tareks-sider .menu-item {
+  text-align: left;
+  padding: 0 10px 0 22px; /* leave space for active indicator */
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255,255,255,0.95);
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: background 140ms ease, color 140ms ease;
+  width: 100%;
+  box-sizing: border-box;
+  height: 40px; /* fixed tab height */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tareks-sider .menu-item .menu-icon {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: transparent;
+  border: 2px solid rgba(255,255,255,0.14);
+  display: inline-block;
+}
+.tareks-sider .menu-item:hover { background: rgba(255,255,255,0.03); }
+/* active state uses translucent light background and a slim blue indicator */
+.tareks-sider .menu-item.active {
+  background: rgba(255,255,255,0.06);
+  color: #fff;
+  position: relative;
+}
+.tareks-sider .menu-item.active::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 18px;
+  border-radius: 2px;
+  background: #2563eb;
+}
+.tareks-sider .menu-item.active .menu-icon { border-color: rgba(37,99,235,0.9); background: rgba(37,99,235,0.14); }
+
+/* collapsed state: keep width but hide text labels for compact view */
+.tareks-sider.collapsed .sider-brand,
+.tareks-sider.collapsed .section-title,
+.tareks-sider.collapsed .menu-item > span.label {
+  display: none;
+}
+.tareks-sider.collapsed .menu-item { justify-content: center; }
+
+.tareks-sider .menu-item .mini { display: none; color: rgba(255,255,255,0.9); font-weight: 700; }
+.tareks-sider.collapsed .menu-item .mini { display: inline-block; }
+

@@ -259,30 +259,30 @@ export default function TareksPage() {
         /* ensure header isn't affected */
         .ant-table-thead > tr.tareks-row-selected > th { background: transparent !important; }
       `}</style>
-      <aside style={{ width: menuOpen ? 220 : 64, transition: 'width 160ms', background: menuOpen ? '#2563eb' : '#1f2937', color: '#fff', padding: 12, boxSizing: 'border-box' }}>
+  <aside className={`tareks-sider ${menuOpen ? '' : 'collapsed'}`} style={{ width: 220, minWidth: 220, maxWidth: 220, padding: 12, boxSizing: 'border-box' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: menuOpen ? 'space-between' : 'center', gap: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 8, background: '#fff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>T</div>
-            {menuOpen && <div style={{ fontWeight: 700 }}>TAREKS</div>}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div className="sider-logo">T</div>
+            <div className="sider-brand"><span className="label">TAREKS</span></div>
           </div>
           <button aria-label="Toggle menu" onClick={() => setMenuOpen((s) => !s)} style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer' }}>{menuOpen ? '◀' : '▶'}</button>
         </div>
 
         <div style={{ marginTop: 18 }}>
-          <div onClick={() => setTareksOpen((s) => !s)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', padding: '8px 6px', borderRadius: 8, background: tareksOpen ? 'rgba(255,255,255,0.08)' : 'transparent' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ width: 8, height: 8, background: '#fff', borderRadius: 2 }} />
-              {menuOpen && <strong>TAREKS</strong>}
+          <div onClick={() => setTareksOpen((s) => !s)} className={`menu-item ${tareksOpen ? 'active' : ''}`} style={{ justifyContent: 'space-between', width: '100%' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span className="menu-icon" style={{ width: 8, height: 8, borderRadius: 2 }} />
+              <div className="section-title"><span className="label">TAREKS</span></div>
             </div>
-            {menuOpen && <span>{tareksOpen ? '▾' : '▸'}</span>}
+            {menuOpen && <span style={{ opacity: 0.9 }}>{tareksOpen ? '▾' : '▸'}</span>}
           </div>
 
           {tareksOpen && (
             <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <button onClick={() => setSelection('arama')} style={{ textAlign: 'left', padding: '8px 10px', borderRadius: 8, background: selection === 'arama' ? '#fff' : 'transparent', color: selection === 'arama' ? '#2563eb' : '#fff', border: 'none', cursor: 'pointer' }}>{menuOpen ? 'Tareks Arama' : 'A'}</button>
+              <button onClick={() => setSelection('arama')} className={`menu-item ${selection === 'arama' ? 'active' : ''}`}><span className="label">Tareks Arama</span><span className="mini">A</span></button>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'stretch' }}>
-                <button onClick={() => setSelection('web')} style={{ textAlign: 'left', padding: '8px 10px', borderRadius: 8, background: selection === 'web' ? '#fff' : 'transparent', color: selection === 'web' ? '#2563eb' : '#fff', border: 'none', cursor: 'pointer', width: '100%' }}>{menuOpen ? 'Tareks Web' : 'W'}</button>
-                <button onClick={() => { if (selectedMasterId) { setSelection('detay'); fetchDetail(selectedMasterId); } }} style={{ textAlign: 'left', padding: '8px 10px', borderRadius: 8, background: selection === 'detay' ? '#fff' : 'transparent', color: selection === 'detay' ? '#2563eb' : '#fff', border: 'none', cursor: 'pointer', width: '100%' }} disabled={!selectedMasterId}>{menuOpen ? 'Tareks Detay' : 'D'}</button>
+                <button onClick={() => setSelection('web')} className={`menu-item ${selection === 'web' ? 'active' : ''}`}><span className="label">Tareks Web</span><span className="mini">W</span></button>
+                <button onClick={() => { if (selectedMasterId) { setSelection('detay'); fetchDetail(selectedMasterId); } }} className={`menu-item ${selection === 'detay' ? 'active' : ''}`} disabled={!selectedMasterId}><span className="label">Tareks Detay</span><span className="mini">D</span></button>
               </div>
             </div>
           )}
