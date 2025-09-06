@@ -234,7 +234,7 @@ export default function TareksPage() {
   }, [rows, columnFilters]);
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', background: '#f8fafc', color: '#000' }}>
+    <div style={{ position: 'relative', minHeight: '100vh', display: 'flex', background: '#f8fafc', color: '#000' }}>
       {/* local style overrides to ensure Ant Table header reserves space for sorter icons and multi-line header content */}
       <style>{`
         /* header cell allow wrapping and space for sorter icon */
@@ -259,7 +259,18 @@ export default function TareksPage() {
         /* ensure header isn't affected */
         .ant-table-thead > tr.tareks-row-selected > th { background: transparent !important; }
       `}</style>
-  <aside className={`tareks-sider ${menuOpen ? '' : 'collapsed'}`} style={{ width: 220, minWidth: 220, maxWidth: 220, padding: 12, boxSizing: 'border-box' }}>
+      <aside
+        className={`tareks-sider ${menuOpen ? '' : 'collapsed'}`}
+        style={{
+          width: menuOpen ? 220 : 0,
+          minWidth: menuOpen ? 220 : 0,
+          maxWidth: menuOpen ? 220 : 0,
+          padding: menuOpen ? 12 : 0,
+          boxSizing: 'border-box',
+          overflow: 'hidden',
+          transition: 'width 0.2s ease',
+        }}
+      >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: menuOpen ? 'space-between' : 'center', gap: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div className="sider-logo">T</div>
@@ -279,15 +290,45 @@ export default function TareksPage() {
 
           {tareksOpen && (
             <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <button onClick={() => setSelection('arama')} className={`menu-item ${selection === 'arama' ? 'active' : ''}`}><span className="label">Tareks Arama</span><span className="mini">A</span></button>
+              <button onClick={() => setSelection('arama')} className={`menu-item ${selection === 'arama' ? 'active' : ''}`}><span className="label">Tareks Arama</span></button>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'stretch' }}>
-                <button onClick={() => setSelection('web')} className={`menu-item ${selection === 'web' ? 'active' : ''}`}><span className="label">Tareks Web</span><span className="mini">W</span></button>
-                <button onClick={() => { if (selectedMasterId) { setSelection('detay'); fetchDetail(selectedMasterId); } }} className={`menu-item ${selection === 'detay' ? 'active' : ''}`} disabled={!selectedMasterId}><span className="label">Tareks Detay</span><span className="mini">D</span></button>
+                <button onClick={() => setSelection('web')} className={`menu-item ${selection === 'web' ? 'active' : ''}`}><span className="label">Tareks Web</span></button>
+                <button
+                  onClick={() => {
+                    if (selectedMasterId) {
+                      setSelection('detay');
+                      fetchDetail(selectedMasterId);
+                    }
+                  }}
+                  className={`menu-item ${selection === 'detay' ? 'active' : ''}`}
+                  disabled={!selectedMasterId}
+                >
+                  <span className="label">Tareks Detay</span>
+                </button>
               </div>
             </div>
           )}
         </div>
       </aside>
+      {!menuOpen && (
+        <button
+          aria-label="Open menu"
+          onClick={() => setMenuOpen(true)}
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 12,
+            background: 'rgb(33,79,115)',
+            color: '#fff',
+            border: 'none',
+            padding: '4px 6px',
+            borderRadius: '0 8px 8px 0',
+            cursor: 'pointer',
+          }}
+        >
+          ▶
+        </button>
+      )}
 
       <main style={{ flex: 1, padding: 24 }}>
         <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>

@@ -230,9 +230,9 @@ main, main > section, #__next > main {
   width: 3px;
   height: 18px;
   border-radius: 2px;
-  background: #2563eb;
+  background: #ffffff;
 }
-.tareks-sider .menu-item.active .menu-icon { border-color: rgba(37,99,235,0.9); background: rgba(37,99,235,0.14); }
+.tareks-sider .menu-item.active .menu-icon { border-color: rgba(255,255,255,0.9); background: rgba(255,255,255,0.14); }
 
 /* collapsed state: keep width but hide text labels for compact view */
 .tareks-sider.collapsed .sider-brand,
@@ -242,6 +242,5 @@ main, main > section, #__next > main {
 }
 .tareks-sider.collapsed .menu-item { justify-content: center; }
 
-.tareks-sider .menu-item .mini { display: none; color: rgba(255,255,255,0.9); font-weight: 700; }
-.tareks-sider.collapsed .menu-item .mini { display: inline-block; }
+
 
