@@ -12,6 +12,7 @@
     "@types/bcrypt": "^6.0.0",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/mssql": "^9.1.8",
+    "antd": "^5.27.2",
     "bcrypt": "^6.0.0",
     "jsonwebtoken": "^9.0.2",
     "kysely": "^0.28.5",

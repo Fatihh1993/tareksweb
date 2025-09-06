@@ -24,3 +24,134 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Allow horizontal scrolling; table containers will control overflow */
+body, html {
+  overflow-x: auto;
+}
+
+/* ensure table headers are painted white */
+.ant-table-thead > tr > th {
+  background: #ffffff !important;
+}
+
+/* Aggressive overrides for Ant components to prevent any dark/black backgrounds */
+.ant-card,
+.ant-card-body,
+.ant-table-wrapper,
+.ant-table,
+.ant-table-container,
+.ant-table-thead > tr > th,
+.ant-table-tbody > tr > td,
+.ant-layout,
+.ant-layout-content,
+.ant-layout-header,
+.ant-layout-footer,
+.ant-layout-sider,
+.ant-modal,
+.ant-modal-content,
+.ant-drawer,
+.ant-drawer-content {
+  background: #ffffff !important;
+  color: #000000 !important;
+}
+
+/* Placeholder state for empty table */
+.ant-table-placeholder, .ant-empty {
+  background: #ffffff !important;
+  color: #111827 !important;
+}
+
+/* Ensure sider keeps intended blue when used */
+.ant-layout-sider {
+  background: #2563eb !important;
+}
+
+/* Prevent very wide table overflow from producing visible dark bands */
+#tareks-table-container, #tareks-table-container * {
+  background: #fff !important;
+}
+
+/* Tareks table fixes */
+#tareks-table-container .ant-table {
+  background: #fff;
+}
+#tareks-table-container .ant-table-thead > tr > th {
+  white-space: nowrap; /* prevent header text wrapping */
+  background: #fff;    /* ensure header stays white */
+  z-index: 10;         /* place above other content when sticky */
+}
+#tareks-table-container .col-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ensure sorter icon does not overlap header text */
+#tareks-table-container .ant-table-column-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#tareks-table-container .ant-table-column-sorters {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* make sorter icon area sit above header text and be visible */
+#tareks-table-container .ant-table-column-sorters {
+  z-index: 20;
+  margin-left: 6px;
+}
+
+#tareks-table-container .ant-table-thead > tr > th {
+  position: relative;
+}
+
+/* make the filter input occupy the full column width */
+#tareks-table-container .col-header .ant-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* ensure clicking inside the filter input doesn't trigger column sorting */
+#tareks-table-container .col-header {
+  pointer-events: auto;
+}
+#tareks-table-container .ant-table-column-sorters > * {
+  pointer-events: auto;
+}
+#tareks-table-container .ant-table-tbody > tr > td {
+  white-space: nowrap; /* keep cells on a single line to expand horizontally */
+}
+
+/* Ensure the overall page and Ant Layout use the app background (prevents unexpected black areas) */
+html, body, #__next {
+  /* Force light background to avoid system dark-mode turning the app black */
+  background: #ffffff !important;
+  color: #000000 !important;
+}
+
+/* Ensure main and section wrappers use the app background and stretch full height */
+main, main > section, #__next > main {
+  background: #ffffff !important;
+  min-height: 100vh;
+}
+
+/* Make sure Ant layout/content wrappers are transparent so our background shows through */
+.ant-layout, .ant-layout-content, .ant-layout-header, .ant-layout-footer {
+  background: #ffffff !important;
+}
+
+/* Ensure table wrappers are white and don't render black behind the table */
+.ant-table-wrapper, .ant-table, .ant-table-container {
+  background: #fff !important;
+}
+
+/* Limit any very wide table overflow from painting weird backgrounds */
+#tareks-table-container {
+  background: #fff;
+  overflow: auto;
+}
