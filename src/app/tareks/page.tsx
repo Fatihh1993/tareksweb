@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useMemo, useState, ChangeEvent } from 'react';
+import React, { useMemo, useState, ChangeEvent, useEffect } from 'react';
 import { Table, Input, Button, Space, Tooltip, Select, Modal } from 'antd';
 
 export default function TareksPage() {
   const [menuOpen, setMenuOpen] = useState(true);
   const [tareksOpen, setTareksOpen] = useState(true);
   // default to 'web' so the embedded Tareks/Eortak page is shown first
-  const [selection, setSelection] = useState<'arama' | 'web' | 'detay'>('web');
+  const [selection, setSelection] = useState<'arama' | 'web' | 'detay' | 'beyan'>('web');
 
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(false);
@@ -21,6 +21,14 @@ export default function TareksPage() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailModalRow, setDetailModalRow] = useState<Record<string, unknown> | null>(null);
   const [detailColumnFilters, setDetailColumnFilters] = useState<Record<string, string>>({});
+  const [beyanRows, setBeyanRows] = useState<Record<string, unknown>[]>([]);
+  const [beyanLoading, setBeyanLoading] = useState(false);
+  const [beyanError, setBeyanError] = useState<string | null>(null);
+  const [masrafRows, setMasrafRows] = useState<Array<Record<string, unknown>>>([]);
+  const [tipDisplayMap, setTipDisplayMap] = useState<Record<string, string>>({});
+  const [newModalOpen, setNewModalOpen] = useState(false);
+  const [newRow, setNewRow] = useState<{ tutar: number; dovizkod: string; tip: string | number | null; kdvoran: number | null; tahakkukno: string | null }>({ tutar: 0, dovizkod: 'TL', tip: null, kdvoran: null, tahakkukno: null });
+  const [selectedBeyanId, setSelectedBeyanId] = useState<string | null>(null);
 
   // (moved below into useMemo for stability)
 
@@ -59,6 +67,83 @@ export default function TareksPage() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setError('Sunucu hatası: ' + msg);
+    }
+  }
+
+  async function fetchBeyan(masterId?: string) {
+    setBeyanError(null);
+    setBeyanLoading(true);
+    setBeyanRows([]);
+    try {
+      if (!masterId) {
+        setBeyanError('Seçili masterId yok');
+        return;
+      }
+      const res = await fetch(`/api/tareksbeyanname?masterId=${encodeURIComponent(masterId)}`);
+      const data = await res.json();
+      if (res.ok) setBeyanRows(data.rows || []);
+      else setBeyanError(data.error || 'Beyanname verisi alınamadı');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setBeyanError('Sunucu hatası: ' + msg);
+    } finally {
+      setBeyanLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (selection === 'beyan') fetchBeyan(selectedMasterId);
+  }, [selection, selectedMasterId]);
+
+  // load masraf türleri (Tip -> display name, kdvoran)
+  useEffect(() => {
+    (async function loadMasraf() {
+      try {
+        const res = await fetch('/api/masraftur');
+        const data = await res.json();
+        if (res.ok) {
+          setMasrafRows(data.rows || []);
+          const m: Record<string, string> = {};
+          (data.rows || []).forEach((r: Record<string, unknown>) => {
+            // map by numeric value (tarekskayittip) but store as string key
+            const key = String(r['tarekskayittip'] ?? '');
+            m[key] = String(r['adi'] ?? r['tarekskayittip'] ?? '');
+          });
+          setTipDisplayMap(m);
+        } else {
+          console.warn('masraftur load:', data.error);
+        }
+      } catch (err) {
+        console.warn('masraftur fetch error', err);
+      }
+    })();
+  }, []);
+
+
+  async function addNewBeyan() {
+    if (!selectedMasterId) {
+      alert('Lütfen önce bir master seçin.');
+      return;
+    }
+    try {
+      // if modal is open, use values from newRow, otherwise use sensible defaults
+      const defaultTip = masrafRows.length ? (masrafRows[0]['tarekskayittip'] ?? null) : null;
+      const defaultKdv = masrafRows.length ? (masrafRows[0]['kdvoran'] ?? null) : null;
+      const body = newModalOpen
+        ? { masterId: selectedMasterId, tutar: newRow.tutar, dovizkod: newRow.dovizkod, tip: newRow.tip, kdvoran: newRow.kdvoran, tahakkukno: newRow.tahakkukno, insuser: null }
+        : { masterId: selectedMasterId, tutar: 0, dovizkod: 'TL', tip: defaultTip, kdvoran: defaultKdv, tahakkukno: null, insuser: null };
+      const res = await fetch('/api/tareksbeyanname', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const data = await res.json();
+      if (res.ok) {
+        setNewModalOpen(false);
+        // refresh list
+        await fetchBeyan(selectedMasterId);
+      } else {
+        alert('Kayıt eklenemedi: ' + (data.error || 'Unknown'));
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      alert('Sunucu hatası: ' + msg);
     }
   }
 
@@ -305,6 +390,18 @@ export default function TareksPage() {
                 >
                   <span className="label">Tareks Detay</span>
                 </button>
+                <button
+                  onClick={() => {
+                    if (selectedMasterId) {
+                      setSelection('beyan');
+                      fetchBeyan(selectedMasterId);
+                    }
+                  }}
+                  className={`menu-item ${selection === 'beyan' ? 'active' : ''}`}
+                  disabled={!selectedMasterId}
+                >
+                  <span className="label">Tareks Beyanname</span>
+                </button>
               </div>
             </div>
           )}
@@ -470,6 +567,147 @@ export default function TareksPage() {
                     <div style={{ color: '#6b7280', fontSize: 13 }}>Not: Bazı siteler iframe içinde görüntülenmeyi engelleyebilir (X-Frame-Options/CSP). Eğer iframe yüklenmiyorsa, sayfayı yeni pencerede açın.</div>
                     <Button type="default" onClick={() => window.open('https://eortak.dtm.gov.tr/eortak/login/selectApplication.htm', '_blank')}>Yeni pencerede aç</Button>
                   </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {selection === 'beyan' && (
+            <div>
+              <h2>Tareks Beyanname</h2>
+              <p>Beyanname içi Para İsteme tablosu (okuma modu).</p>
+              {beyanError && <div style={{ color: '#dc2626', marginBottom: 8 }}>{beyanError}</div>}
+              <div style={{ marginTop: 12 }}>
+                <div style={{ background: '#fff', borderRadius: 8, padding: 8, overflow: 'auto' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <div />
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <Button
+                        type="primary"
+                        onClick={() => {
+                          // initialize defaults from masrafRows when opening modal
+                          const defaultTip = masrafRows.length ? (masrafRows[0]['tarekskayittip'] ?? null) : null;
+                          const defaultKdv = masrafRows.length ? (masrafRows[0]['kdvoran'] ?? null) : null;
+                          setNewRow({ tutar: 0, dovizkod: 'TL', tip: (defaultTip as string | number | null), kdvoran: (defaultKdv as number | null), tahakkukno: null });
+                          setNewModalOpen(true);
+                        }}
+                        disabled={!selectedMasterId}
+                      >
+                        Yeni Kayıt
+                      </Button>
+                      <Button
+                        danger
+                        onClick={async () => {
+                          if (!selectedBeyanId) {
+                            alert('Lütfen silmek için bir kayıt seçin.');
+                            return;
+                          }
+                          if (!confirm('Seçili kaydı silmek istediğinize emin misiniz?')) return;
+                          try {
+                            const res = await fetch(`/api/tareksbeyanname?id=${encodeURIComponent(selectedBeyanId)}`, { method: 'DELETE' });
+                            const data = await res.json();
+                            if (res.ok) {
+                              // refresh list and clear selection
+                              await fetchBeyan(selectedMasterId);
+                              setSelectedBeyanId(null);
+                            } else {
+                              alert('Silme başarısız: ' + (data.error || 'Unknown'));
+                            }
+                          } catch (err) {
+                            const msg = err instanceof Error ? err.message : String(err);
+                            alert('Sunucu hatası: ' + msg);
+                          }
+                        }}
+                        disabled={!selectedBeyanId}
+                      >
+                        Kayıt Sil
+                      </Button>
+                    </div>
+                  </div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: 'left', padding: '8px 12px' }}>Tutar</th>
+                        <th style={{ textAlign: 'left', padding: '8px 12px' }}>Döviz Kod</th>
+                        <th style={{ textAlign: 'left', padding: '8px 12px' }}>Tip</th>
+                        <th style={{ textAlign: 'left', padding: '8px 12px' }}>KDV Oran</th>
+                        <th style={{ textAlign: 'left', padding: '8px 12px' }}>Tahakkuk No</th>
+                        <th style={{ textAlign: 'left', padding: '8px 12px' }}>Kayıt Kullanıcı</th>
+                        <th style={{ textAlign: 'left', padding: '8px 12px' }}>Kayıt Tarihi</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {beyanRows.length === 0 && <tr><td colSpan={7} style={{ padding: 18, color: '#6b7280' }}>{beyanLoading ? 'Yükleniyor...' : 'Kayıt bulunamadı'}</td></tr>}
+                      {beyanRows.map((r, i) => {
+                        const id = String(r['ParaIstemeId'] ?? r['paraIstemeId'] ?? r['tareksparaistemeid'] ?? '');
+                        const isSelected = selectedBeyanId === id;
+                        return (
+                          <tr
+                            key={i}
+                            onClick={() => setSelectedBeyanId(id || null)}
+                            style={{ borderTop: '1px solid #f1f5f9', background: isSelected ? '#fffbeb' : undefined, cursor: 'pointer' }}
+                          >
+                            <td style={{ padding: '10px 12px' }}>{String(r['Tutar'] ?? r['tutar'] ?? '')}</td>
+                            <td style={{ padding: '10px 12px' }}>{String(r['Döviz Kod'] ?? r['dovizkod'] ?? '')}</td>
+                            <td style={{ padding: '10px 12px' }}> {
+                              // map numeric tip to display name if available
+                              (() => {
+                                const raw = r['Tip'] ?? r['tip'];
+                                const key = raw !== undefined && raw !== null ? String(raw) : '';
+                                return tipDisplayMap[key] ?? String(raw ?? '');
+                              })()
+                            }</td>
+                            <td style={{ padding: '10px 12px' }}>{String(r['KDV Oran'] ?? r['kdvoran'] ?? '')}</td>
+                            <td style={{ padding: '10px 12px' }}>{String(r['Tahakkuk No'] ?? r['tahakkukno'] ?? '')}</td>
+                            <td style={{ padding: '10px 12px' }}>{String(r['Kayıt Kullanıcı'] ?? r['insuser'] ?? '')}</td>
+                            <td style={{ padding: '10px 12px' }}>{String(r['Kayıt Tarihi'] ?? r['instime'] ?? '')}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  <Modal title="Yeni Para İsteme" open={newModalOpen} onOk={() => addNewBeyan()} onCancel={() => setNewModalOpen(false)}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: 6, fontWeight: 600 }}>Tutar</label>
+                        <Input value={newRow.tutar} onChange={(e: ChangeEvent<HTMLInputElement>) => setNewRow((s) => ({ ...s, tutar: Number(e.target.value || 0) }))} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: 6, fontWeight: 600 }}>Döviz Kod</label>
+                        <Input value={newRow.dovizkod} onChange={(e: ChangeEvent<HTMLInputElement>) => setNewRow((s) => ({ ...s, dovizkod: e.target.value }))} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: 6, fontWeight: 600 }}>Tip</label>
+                        <Select
+                          style={{ width: '100%' }}
+                          value={newRow.tip ?? undefined}
+                          onChange={(val) => {
+                            // set tip and also set related kdvoran from masrafRows
+                            const tipKey = val as string | number | null;
+                            let foundKdv: number | null = null;
+                            if (tipKey !== null && tipKey !== undefined) {
+                              const found = (masrafRows || []).find((m: Record<string, unknown>) => String(m['tarekskayittip']) === String(tipKey));
+                              if (found && found['kdvoran'] !== undefined && found['kdvoran'] !== null) {
+                                const n = Number(found['kdvoran']);
+                                if (!Number.isNaN(n)) foundKdv = n;
+                              }
+                            }
+                            setNewRow((s) => ({ ...s, tip: tipKey, kdvoran: foundKdv }));
+                          }}
+                          options={(masrafRows || []).map((m: Record<string, unknown>) => ({ label: String(m['adi'] ?? m['tarekskayittip']), value: m['tarekskayittip'] }))}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: 6, fontWeight: 600 }}>KDV Oran</label>
+                        <Input value={newRow.kdvoran ?? ''} onChange={(e: ChangeEvent<HTMLInputElement>) => setNewRow((s) => ({ ...s, kdvoran: e.target.value === '' ? null : Number(e.target.value) }))} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: 6, fontWeight: 600 }}>Tahakkuk No</label>
+                        <Input value={newRow.tahakkukno ?? ''} onChange={(e: ChangeEvent<HTMLInputElement>) => setNewRow((s) => ({ ...s, tahakkukno: e.target.value }))} />
+                      </div>
+                    </div>
+                  </Modal>
+                  {/* previously had a right-click context menu; replaced with a visible button above */}
                 </div>
               </div>
             </div>
