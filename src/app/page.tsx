@@ -67,7 +67,7 @@ export default function LoginPage() {
         flexDirection: 'column',
         alignItems: 'center',
       }}>
-        <h2 style={{ color: '#26b6d4', marginBottom: 24, fontWeight: 700 }}>Giriş Yap</h2>
+        <h2 style={{ color: '#26b6d4', marginBottom: 24, fontWeight: 700 }}>Girişş Yap</h2>
         <form onSubmit={handleSubmit} style={{ width: '100%' }}>
           <input
             className="login-input"
