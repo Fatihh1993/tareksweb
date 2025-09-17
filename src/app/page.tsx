@@ -30,6 +30,10 @@ export default function LoginPage() {
         setSuccess('Giriş başarılı');
         // store minimal user info in session
         try { sessionStorage.setItem('user', JSON.stringify(data.user)); } catch {}
+        // persist username for server-side inserts (insuser)
+        try {
+          document.cookie = `username=${encodeURIComponent(username)}; path=/; max-age=${60*60*24}`;
+        } catch {}
         // redirect to tabbed Tareks Web page
         try { router.push('/tareks'); } catch { /* ignore */ }
         return;

@@ -5,11 +5,17 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "type": "chrome",
+            "type": "pwa-chrome",
             "request": "launch",
             "name": "Launch Chrome against localhost",
-            "url": "http://localhost:8080",
-            "webRoot": "${workspaceFolder}"
+            "url": "http://localhost:3000",               // projenizin portuna göre güncelleyin
+            "webRoot": "${workspaceFolder}",
+            "runtimeArgs": [
+              "--remote-debugging-port=9222",
+              "--user-data-dir=${env:TEMP}/vscode-chrome-profile"
+            ],
+            "breakOnLoad": true
         }
     ]
 }
+

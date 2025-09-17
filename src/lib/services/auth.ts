@@ -1,48 +1,21 @@
-import { getPool } from '../db';
-import sql from 'mssql';
+import { AuthUser } from '../models/auth-user';
+import { getAuthRepository } from '../repositories';
 
-export type AuthUser = {
-  kullaniciid?: number;
-  kod?: string;
-  ad?: string;
-  email?: string;
-  bilgeuser?: unknown;
-};
+export type { AuthUser } from '../models/auth-user';
 
-export async function authenticate(username: string, password: string): Promise<{ success: boolean; user?: AuthUser; message?: string }>{
+export async function authenticate(
+  username: string,
+  password: string,
+): Promise<{ success: boolean; user?: AuthUser; message?: string }> {
   try {
-    const pool = await getPool();
-    const passwordUpper = String(password).toUpperCase();
+    const repository = getAuthRepository();
+    const user = await repository.findByCredentials(username, password);
 
-    const request = pool.request();
-    request.input('user', sql.VarChar(128), username);
-    request.input('sifre', sql.VarChar(50), passwordUpper);
-
-    const query = `
-      SELECT kullaniciid, kod, ad, engelle, muhasebekod,
-        dbo.sky_kullanici_ok(@user,@sifre) AS kullaniciok, email, bilgeuser
-      FROM sky_kullanici
-      WHERE kod = @user
-    `;
-
-    const result = await request.query(query);
-    if (result.recordset && result.recordset.length > 0) {
-      const row = result.recordset[0];
-      const ok = row.kullaniciok === true || row.kullaniciok === 1;
-
-      if (ok) {
-        const user: AuthUser = {
-          kullaniciid: row.kullaniciid,
-          kod: row.kod,
-          ad: row.ad,
-          email: row.email,
-          bilgeuser: row.bilgeuser,
-        };
-        return { success: true, user };
-      }
+    if (user) {
+      return { success: true, user };
     }
 
-    return { success: false, message: 'Kullanıcı adı veya şifre hatalı' };
+    return { success: false, message: 'Kullanici adi veya sifre hatali' };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[auth service] authenticate error:', msg);
