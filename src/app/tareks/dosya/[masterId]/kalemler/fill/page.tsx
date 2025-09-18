@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import { Button, Form, Input, Space, Table, message } from "antd";
+import { Button, Space, Table, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 
 type Row = Record<string, unknown>;
@@ -19,7 +19,6 @@ export default function KalemlerFillPage() {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
-  const [form] = Form.useForm();
 
   useEffect(() => {
     let active = true;
@@ -76,18 +75,15 @@ export default function KalemlerFillPage() {
     } as Record<string, unknown>;
   }, [refId]);
 
-  useEffect(() => {
-    if (selectedRow) {
-      form.setFieldsValue(mapToForm(selectedRow));
-    }
-  }, [selectedRow, form, mapToForm]);
+  // no interim form anymore
 
-  function tryFillInIframe() {
+  function tryFillInIframe(values?: Record<string, unknown>) {
     const iframe = iframeRef.current;
     if (!iframe || !iframe.contentWindow) return message.warning("Sayfa yüklenmedi");
     try {
       const doc = iframe.contentWindow.document;
-      const values = form.getFieldsValue();
+      const vals = values || (selectedRow ? mapToForm(selectedRow) : {});
+      const vo = vals as Record<string, unknown>;
       const setVal = (sel: string, val: unknown) => {
         const el = doc.querySelector(sel) as (HTMLInputElement | HTMLTextAreaElement | null);
         if (!el) return;
@@ -97,11 +93,11 @@ export default function KalemlerFillPage() {
         }
       };
       // Best-effort: adjust selectors as needed on target page
-      setVal('input[name="gtip"]', values.gtip);
-      setVal('input[name="miktar"]', values.miktar);
-      setVal('input[name="birim"]', values.birim);
-      setVal('input[name="mense"]', values.mense);
-      setVal('textarea[name="aciklama"]', values.aciklama);
+      setVal('input[name="gtip"]', vo.gtip);
+      setVal('input[name="miktar"]', vo.miktar);
+      setVal('input[name="birim"]', vo.birim);
+      setVal('input[name="mense"]', vo.mense);
+      setVal('textarea[name="aciklama"]', vo.aciklama);
       message.success("Form değerleri iframe içine aktarıldı (deneysel)");
     } catch (e) {
       message.error("Iframe içine yazılamadı: " + (e as Error).message);
@@ -110,8 +106,7 @@ export default function KalemlerFillPage() {
 
   function tryFillInIframeFromRow(row: Row | null) {
     if (!row) return message.warning("Lütfen bir kalem seçin");
-    form.setFieldsValue(mapToForm(row));
-    tryFillInIframe();
+    tryFillInIframe(mapToForm(row));
   }
 
   return (
@@ -122,12 +117,7 @@ export default function KalemlerFillPage() {
           <div className="flex items-center gap-8">
             <div className="text-xs text-slate-400">Çift tıkla → satırı seç</div>
             <Space>
-              <Button type="primary" onClick={() => {
-                if (!selectedRow) return message.warning("Lütfen bir kalem seçin");
-                form.setFieldsValue(mapToForm(selectedRow));
-                message.success("Seçili satır form alanlarına aktarıldı");
-              }}>Seçili Satırı Forma Al</Button>
-              <Button onClick={() => tryFillInIframeFromRow(selectedRow)}>Seçili Satırı Webe Doldur</Button>
+              <Button type="primary" onClick={() => tryFillInIframeFromRow(selectedRow)}>Seçili Satırı Webe Doldur</Button>
             </Space>
           </div>
         </div>
@@ -147,24 +137,6 @@ export default function KalemlerFillPage() {
       </div>
 
       <div className="bg-white rounded border border-slate-200 p-3">
-        <div className="font-medium mb-2">Form (Gerekirse düzenleyin)</div>
-        <Form form={form} layout="vertical">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <Form.Item label="GTIP" name="gtip"><Input /></Form.Item>
-            <Form.Item label="Miktar" name="miktar"><Input /></Form.Item>
-            <Form.Item label="Birim" name="birim"><Input /></Form.Item>
-            <Form.Item label="Menşe" name="mense"><Input /></Form.Item>
-            <Form.Item label="Açıklama" name="aciklama"><Input.TextArea rows={2} /></Form.Item>
-            <Form.Item label="Referans" name="referans"><Input /></Form.Item>
-          </div>
-        </Form>
-        <Space>
-          <Button onClick={() => tryFillInIframe()}>Sayfadaki Formu Doldur</Button>
-          <Button onClick={() => navigator.clipboard.writeText(JSON.stringify(form.getFieldsValue()))}>Formu Panoya Kopyala</Button>
-        </Space>
-      </div>
-
-      <div className="bg-white rounded border border-slate-200 p-3">
         <div className="flex items-center justify-between mb-2">
           <div className="font-medium">Web Sayfası</div>
           <Button onClick={() => window.open("/api/proxy?url=" + encodeURIComponent("https://eortak.dtm.gov.tr/eortak/login/selectApplication.htm"), "_blank")}>
@@ -175,7 +147,7 @@ export default function KalemlerFillPage() {
           <iframe
             ref={iframeRef}
             title="Proxy Web"
-            src={"/api/proxy?url=" + encodeURIComponent("https://eortak.dtm.gov.tr/eortak/login/selectApplication.htm")}
+            src={"/api/proxy?force=native&url=" + encodeURIComponent("https://eortak.dtm.gov.tr/eortak/login/selectApplication.htm")}
             className="w-full h-full"
           />
         </div>
