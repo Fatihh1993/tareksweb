@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useParams } from "next/navigation";
 import Link from "next/link";
-import { Button, Card, Space, Tag, Table } from "antd";
-import type { ColumnsType } from "antd/es/table";
+import { Button, Card, Space, Tag, Table, Input, Tooltip, message } from "antd";
+import type { ColumnsType, ColumnType } from "antd/es/table";
 
 type Row = Record<string, unknown>;
 
@@ -84,15 +84,66 @@ export default function DosyaOzetPage() {
     );
   }
 
+  // Inline edit state (same deneyim: Kalemleri Düzenle)
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [editBuffer, setEditBuffer] = useState<Row>({});
+
   const detailColumns = useMemo<ColumnsType<Row>>(() => {
     if (!detailRows || !detailRows[0]) return [];
     const hidden = new Set(["tareksmasterid", "beyannameid", "musteriid"]);
-    const first = detailRows[0];
-    return Object.keys(first)
+    const keySet = new Set<string>();
+    for (const r of detailRows) {
+      Object.keys(r).forEach((k) => { if (!hidden.has(k)) keySet.add(k); });
+    }
+    const keys = Array.from(keySet);
+    const cols: ColumnsType<Row> = keys
       .filter((k) => !hidden.has(k))
-      .slice(0, 12)
-      .map((k) => ({ title: k, dataIndex: k, key: k, width: 160 })) as ColumnsType<Row>;
-  }, [detailRows]);
+      .map((k) => ({
+        title: k,
+        dataIndex: k,
+        key: k,
+        width: 160,
+        render: (v: unknown, record: Row) => {
+          const rowKey = getRowKey(record);
+          const editing = selectedKey === rowKey;
+          if (!editing) return <span>{String(v ?? "")}</span>;
+          return (
+            <Input
+              size="small"
+              value={String((editBuffer[k] as string | number | undefined) ?? (v as string | number | undefined) ?? "")}
+              onChange={(e) => setEditBuffer((s) => ({ ...s, [k]: e.target.value }))}
+            />
+          );
+        },
+      })) as ColumnsType<Row>;
+
+    const actionsCol: ColumnType<Row> = {
+      title: "İşlemler",
+      key: "actions",
+      fixed: "right",
+      width: 160,
+      render: (_: unknown, record: Row) => {
+        const rowKey = getRowKey(record);
+        const editing = selectedKey === rowKey;
+        return (
+          <Space>
+            {!editing ? (
+              <Button size="small" onClick={() => { setSelectedKey(rowKey); setEditBuffer(record); }}>Düzenle</Button>
+            ) : (
+              <>
+                <Tooltip title="Sunucu kaydetmesi için servis eklenecek">
+                  <Button size="small" type="primary" onClick={() => { message.info("Kaydet servisi eklenecek (placeholder)"); setSelectedKey(null); }}>Kaydet</Button>
+                </Tooltip>
+                <Button size="small" onClick={() => setSelectedKey(null)}>İptal</Button>
+              </>
+            )}
+          </Space>
+        );
+      },
+    };
+    cols.push(actionsCol);
+    return cols;
+  }, [detailRows, selectedKey, editBuffer]);
 
   return (
     <div className="space-y-6">
@@ -103,9 +154,6 @@ export default function DosyaOzetPage() {
           <div className="text-xs text-slate-400 mt-1">Master ID: {String(masterId)}</div>
         </div>
         <Space wrap>
-          <Link href={`/tareks/dosya/${encodeURIComponent(String(masterId))}/kalemler/edit`}>
-            <Button type="primary">Kalemleri Duzenle</Button>
-          </Link>
           <Link href={`/tareks/dosya/${encodeURIComponent(String(masterId))}/kalemler/fill${ref ? `?ref=${encodeURIComponent(ref)}` : ""}`}>
             <Button>Kalemlerle Doldur (Web)</Button>
           </Link>
@@ -151,18 +199,19 @@ export default function DosyaOzetPage() {
       </Card>
 
       <Card title="Tareks Detay">
-        <div className="text-sm text-slate-500 mb-2">Kalemleri Duzenle sayfasindaki liste (okuma modu)</div>
+        <div className="text-sm text-slate-500 mb-2">Kalemler üzerinde hızlı düzenleme yapabilirsiniz.</div>
         <div className="bg-white rounded border border-slate-100">
           <Table
             size="small"
             dataSource={detailRows.map((r) => ({ key: getRowKey(r), ...r }))}
             columns={detailColumns}
-            scroll={{ x: "max-content", y: 420 }}
-            pagination={{ pageSize: 50 }}
+            scroll={{ x: "max-content", y: 520 }}
+            pagination={{ pageSize: 50, showSizeChanger: true }}
+            onRow={(record) => ({ onClick: () => setSelectedKey(record.key as string) })}
+            rowClassName={(rec) => (rec.key === selectedKey ? "bg-amber-50" : "")}
           />
         </div>
       </Card>
     </div>
   );
 }
-
