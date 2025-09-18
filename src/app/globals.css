@@ -160,6 +160,11 @@ main, main > section, #__next > main {
   white-space: nowrap;
 }
 
+/* Selected row highlight (light blue) */
+.tareks-row-selected > td {
+  background: #e6f7ff !important;
+}
+
 /* Modern, minimal sidebar styles used by Tareks page */
 .tareks-sider {
   font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;

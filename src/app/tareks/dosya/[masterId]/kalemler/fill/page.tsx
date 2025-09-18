@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
@@ -19,6 +19,11 @@ export default function KalemlerFillPage() {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const draggingRef = useRef(false);
+  const startYRef = useRef(0);
+  const startHRef = useRef(120);
+  const [tableHeight, setTableHeight] = useState<number>(120);
+  const [mode, setMode] = useState<'proxy' | 'direct'>('proxy');
 
   useEffect(() => {
     let active = true;
@@ -30,11 +35,11 @@ export default function KalemlerFillPage() {
         const data = await res.json();
         if (!active) return;
         if (res.ok) setRows((data.rows as Row[]) || []);
-        else setError(data.error || "Detay alınamadı");
+        else setError(data.error || "Detay alÄ±namadÄ±");
       } catch (e) {
         if (!active) return;
         const msg = e instanceof Error ? e.message : String(e);
-        setError("Sunucu hatası: " + msg);
+        setError("Sunucu hatasÄ±: " + msg);
       } finally {
         if (active) setLoading(false);
       }
@@ -69,7 +74,7 @@ export default function KalemlerFillPage() {
       gtip: row["gtip"] ?? "",
       miktar: row["miktar"] ?? (row["Miktar"] as unknown) ?? "",
       birim: row["birim"] ?? (row["Birim"] as unknown) ?? "",
-      mense: row["mense"] ?? row["Menşe"] ?? row["menseulke"] ?? "",
+      mense: row["mense"] ?? row["MenÅŸe"] ?? row["menseulke"] ?? "",
       aciklama: row["aciklama"] ?? row["malaciklama"] ?? "",
       referans: row["referansno"] ?? refId ?? "",
     } as Record<string, unknown>;
@@ -78,8 +83,12 @@ export default function KalemlerFillPage() {
   // no interim form anymore
 
   function tryFillInIframe(values?: Record<string, unknown>) {
+    if (mode !== 'proxy') {
+      message.warning('Doldurma sadece Proxy modunda mÃ¼mkÃ¼ndÃ¼r');
+      return;
+    }
     const iframe = iframeRef.current;
-    if (!iframe || !iframe.contentWindow) return message.warning("Sayfa yüklenmedi");
+    if (!iframe || !iframe.contentWindow) return message.warning("Sayfa yÃ¼klenmedi");
     try {
       const doc = iframe.contentWindow.document;
       const vals = values || (selectedRow ? mapToForm(selectedRow) : {});
@@ -98,14 +107,14 @@ export default function KalemlerFillPage() {
       setVal('input[name="birim"]', vo.birim);
       setVal('input[name="mense"]', vo.mense);
       setVal('textarea[name="aciklama"]', vo.aciklama);
-      message.success("Form değerleri iframe içine aktarıldı (deneysel)");
+      message.success("Form deÄŸerleri iframe iÃ§ine aktarÄ±ldÄ± (deneysel)");
     } catch (e) {
-      message.error("Iframe içine yazılamadı: " + (e as Error).message);
+      message.error("Iframe iÃ§ine yazÄ±lamadÄ±: " + (e as Error).message);
     }
   }
 
   function tryFillInIframeFromRow(row: Row | null) {
-    if (!row) return message.warning("Lütfen bir kalem seçin");
+    if (!row) return message.warning("LÃ¼tfen bir kalem seÃ§in");
     tryFillInIframe(mapToForm(row));
   }
 
@@ -115,43 +124,67 @@ export default function KalemlerFillPage() {
         <div className="flex items-center justify-between p-2">
           <div className="text-sm text-slate-600">Kalemler</div>
           <div className="flex items-center gap-8">
-            <div className="text-xs text-slate-400">Çift tıkla → satırı seç</div>
+            <div className="text-xs text-slate-400">Ã‡ift tÄ±kla â†’ satÄ±rÄ± seÃ§</div>
             <Space>
-              <Button type="primary" onClick={() => tryFillInIframeFromRow(selectedRow)}>Seçili Satırı Webe Doldur</Button>
+              <Button type="primary" onClick={() => tryFillInIframeFromRow(selectedRow)}>SeÃ§ili SatÄ±rÄ± Webe Doldur</Button>
             </Space>
           </div>
         </div>
         {error && <div className="text-red-600 text-sm px-2">{error}</div>}
+        <div style={{ height: `${tableHeight}px`, overflow: 'hidden' }}>
         <Table
           size="small"
           loading={loading}
           columns={cols}
           dataSource={rows.map((r) => ({ key: getKey(r), ...r }))}
           pagination={false}
-          scroll={{ x: "max-content", y: 64 }}
+          scroll={{ x: "max-content", y: Math.max(32, tableHeight - 32) }}
           onRow={(record) => ({
-            onDoubleClick: () => setSelectedKey(record.key as string),
+            onClick: () => setSelectedKey(record.key as string),
           })}
-          rowClassName={(rec) => (rec.key === selectedKey ? "bg-amber-50" : "")}
+          rowClassName={(rec) => (rec.key === selectedKey ? "tareks-row-selected" : "")}
+        />
+        </div>
+        <div
+          onMouseDown={(e) => {
+            draggingRef.current = true;
+            startYRef.current = e.clientY;
+            startHRef.current = tableHeight;
+            const onMove = (ev: MouseEvent) => {
+              if (!draggingRef.current) return;
+              const dy = ev.clientY - startYRef.current;
+              const next = Math.max(56, Math.min(420, startHRef.current + dy));
+              setTableHeight(next);
+            };
+            const onUp = () => {
+              draggingRef.current = false;
+              window.removeEventListener('mousemove', onMove);
+              window.removeEventListener('mouseup', onUp);
+            };
+            window.addEventListener('mousemove', onMove);
+            window.addEventListener('mouseup', onUp);
+          }}
+          style={{ cursor: 'ns-resize', height: 6, marginTop: 4, background: '#e5e7eb', borderRadius: 3 }}
+          title="Yüksekliği sürükleyerek ayarlayın"
         />
       </div>
 
       <div className="bg-white rounded border border-slate-200 p-3">
         <div className="flex items-center justify-between mb-2">
-          <div className="font-medium">Web Sayfası</div>
+          <div className="font-medium">Web SayfasÄ±</div>
           <Button onClick={() => window.open("/api/proxy?url=" + encodeURIComponent("https://eortak.dtm.gov.tr/eortak/login/selectApplication.htm"), "_blank")}>
-            Yeni Pencerede Aç
+            Yeni Pencerede AÃ§
           </Button>
         </div>
         <div className="h-[520px] rounded overflow-hidden border">
           <iframe
             ref={iframeRef}
             title="Proxy Web"
-            src={"/api/proxy?force=native&url=" + encodeURIComponent("https://eortak.dtm.gov.tr/eortak/login/selectApplication.htm")}
+            src={"https://eortak.dtm.gov.tr/eortak/login/selectApplication.htm"}
             className="w-full h-full"
           />
         </div>
-        <div className="text-xs text-slate-500 mt-2">Not: Proksi ile yüklenen sayfaya basit alan doldurma yapılır. Gelişmiş doldurma için alan seçicileri hedef sayfaya göre güncellenmelidir.</div>
+        <div className="text-xs text-slate-500 mt-2">Not: Proksi ile yÃ¼klenen sayfaya basit alan doldurma yapÄ±lÄ±r. GeliÅŸmiÅŸ doldurma iÃ§in alan seÃ§icileri hedef sayfaya gÃ¶re gÃ¼ncellenmelidir.</div>
       </div>
     </div>
   );
