@@ -42,6 +42,80 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'host not allowed' }, { status: 403 });
     }
 
+    // If explicitly requested, use the native client and return immediately
+    if (forceNative) {
+      try {
+        const native = await (async function nativeFetch(u: string) {
+          return new Promise<{ status?: number; headers?: Record<string, string | string[]>; body?: string }>((resolve, reject) => {
+            try {
+              const parsed = new URL(u);
+              const allowInsecure = process.env.ALLOW_INSECURE_PROXY === '1';
+              const allowLegacy = process.env.ALLOW_LEGACY_RENEGOTIATION === '1';
+              const commonHeaders = { 'user-agent': 'node' } as Record<string, string>;
+              const onResponse = (res: http.IncomingMessage) => {
+                const chunks: Buffer[] = [];
+                res.on('data', (c: Buffer) => chunks.push(c));
+                res.on('end', () => {
+                  const body = Buffer.concat(chunks).toString('utf8');
+                  const headers: Record<string, string | string[]> = {};
+                  const rawHeaders = (res.headers || {}) as Record<string, string | string[] | undefined>;
+                  Object.keys(rawHeaders).forEach((k) => {
+                    const v = rawHeaders[k];
+                    if (v !== undefined) headers[k] = v as string | string[];
+                  });
+                  resolve({ status: res.statusCode, headers, body });
+                });
+              };
+              if (parsed.protocol === 'http:') {
+                const httpOpts: http.RequestOptions = { method: 'GET', headers: commonHeaders, timeout: 15000 };
+                const req = http.request(parsed, httpOpts, onResponse);
+                req.on('timeout', () => { try { req.destroy(new Error('ETIMEDOUT')); } catch {} });
+                req.on('error', (e: NodeJS.ErrnoException) => reject(e));
+                req.end();
+              } else {
+                const httpsOpts: https.RequestOptions = {
+                  method: 'GET', headers: commonHeaders, timeout: 15000,
+                  rejectUnauthorized: allowInsecure ? false : true,
+                  servername: parsed.hostname,
+                  secureOptions: allowLegacy ? CryptoConstants.SSL_OP_LEGACY_SERVER_CONNECT : undefined,
+                  minVersion: allowLegacy ? 'TLSv1' : 'TLSv1.2',
+                };
+                const req = https.request(parsed, httpsOpts, onResponse);
+                req.on('timeout', () => { try { req.destroy(new Error('ETIMEDOUT')); } catch {} });
+                req.on('error', (e: NodeJS.ErrnoException) => reject(e));
+                req.end();
+              }
+            } catch (e) { reject(e); }
+          });
+        })(targetUrl.toString());
+
+        if (native && native.body && typeof native.body === 'string') {
+          const contentType = (native.headers && (native.headers['content-type'] as string)) || '';
+          if (!contentType.includes('text/html')) {
+            return new NextResponse(native.body, { status: native.status || 200, headers: { 'content-type': contentType || 'application/octet-stream' } });
+          }
+          let body = native.body;
+          const baseTag = `<base href="${targetUrl.origin}" />`;
+          if (/<head[^>]*>/i.test(body)) body = body.replace(/<head([^>]*)>/i, (m) => `${m}\n    ${baseTag}`);
+          else body = `${baseTag}\n${body}`;
+          body = body.replace(/<meta[^>]+http-equiv=["']?content-security-policy["']?[^>]*>/ig, '');
+          for (const host of allowedHosts) {
+            const re = new RegExp(`https?:\\/\\/${host}([^"'<>\\s]*)`, 'ig');
+            body = body.replace(re, (m: string, p1: string) => {
+              const path = p1 || '';
+              const safe = encodeURIComponent(`https://${host}${path}`);
+              return `/api/proxy?force=native&url=${safe}`;
+            });
+          }
+          return new NextResponse(body, { status: native.status || 200, headers: { 'content-type': 'text/html; charset=utf-8' } });
+        }
+        return NextResponse.json({ error: 'proxy fetch failed', detail: 'native fetch empty' }, { status: 502 });
+      } catch (err) {
+        const nmsg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+        return NextResponse.json({ error: 'proxy fetch failed', detail: nmsg }, { status: 502 });
+      }
+    }
+
     let res: Response | null = null;
     if (!forceNative) {
       try {

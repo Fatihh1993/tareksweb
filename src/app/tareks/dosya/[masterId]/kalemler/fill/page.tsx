@@ -111,7 +111,7 @@ export default function KalemlerFillPage() {
 
   return (
     <div className="space-y-4">
-      <div className="bg-white rounded border border-slate-200 p-2">
+      <div className="bg-white rounded border border-slate-200 p-2 tareks-compact">
         <div className="flex items-center justify-between p-2">
           <div className="text-sm text-slate-600">Kalemler</div>
           <div className="flex items-center gap-8">
@@ -127,8 +127,8 @@ export default function KalemlerFillPage() {
           loading={loading}
           columns={cols}
           dataSource={rows.map((r) => ({ key: getKey(r), ...r }))}
-          pagination={{ pageSize: 30 }}
-          scroll={{ x: "max-content", y: 360 }}
+          pagination={false}
+          scroll={{ x: "max-content", y: 64 }}
           onRow={(record) => ({
             onDoubleClick: () => setSelectedKey(record.key as string),
           })}

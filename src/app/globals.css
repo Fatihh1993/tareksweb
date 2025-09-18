@@ -151,6 +151,15 @@ main, main > section, #__next > main {
   overflow: auto;
 }
 
+/* Compact header/body paddings for short, single-row-like table */
+.tareks-compact .ant-table-thead > tr > th {
+  padding: 4px 8px !important;
+}
+.tareks-compact .ant-table-tbody > tr > td {
+  padding: 4px 8px !important;
+  white-space: nowrap;
+}
+
 /* Modern, minimal sidebar styles used by Tareks page */
 .tareks-sider {
   font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
