@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
@@ -35,11 +35,11 @@ export default function KalemlerFillPage() {
         const data = await res.json();
         if (!active) return;
         if (res.ok) setRows((data.rows as Row[]) || []);
-        else setError(data.error || "Detay alÄ±namadÄ±");
+        else setError(data.error || "Detay alınamadı");
       } catch (e) {
         if (!active) return;
         const msg = e instanceof Error ? e.message : String(e);
-        setError("Sunucu hatasÄ±: " + msg);
+        setError("Sunucu hatası: " + msg);
       } finally {
         if (active) setLoading(false);
       }
@@ -74,21 +74,19 @@ export default function KalemlerFillPage() {
       gtip: row["gtip"] ?? "",
       miktar: row["miktar"] ?? (row["Miktar"] as unknown) ?? "",
       birim: row["birim"] ?? (row["Birim"] as unknown) ?? "",
-      mense: row["mense"] ?? row["MenÅŸe"] ?? row["menseulke"] ?? "",
+      mense: row["mense"] ?? row["Menşe"] ?? row["menseulke"] ?? "",
       aciklama: row["aciklama"] ?? row["malaciklama"] ?? "",
       referans: row["referansno"] ?? refId ?? "",
     } as Record<string, unknown>;
   }, [refId]);
 
-  // no interim form anymore
-
   function tryFillInIframe(values?: Record<string, unknown>) {
     if (mode !== 'proxy') {
-      message.warning('Doldurma sadece Proxy modunda mÃ¼mkÃ¼ndÃ¼r');
+      message.warning('Doldurma sadece Proxy modunda mümkündür');
       return;
     }
     const iframe = iframeRef.current;
-    if (!iframe || !iframe.contentWindow) return message.warning("Sayfa yÃ¼klenmedi");
+    if (!iframe || !iframe.contentWindow) return message.warning("Sayfa yüklenmedi");
     try {
       const doc = iframe.contentWindow.document;
       const vals = values || (selectedRow ? mapToForm(selectedRow) : {});
@@ -107,14 +105,14 @@ export default function KalemlerFillPage() {
       setVal('input[name="birim"]', vo.birim);
       setVal('input[name="mense"]', vo.mense);
       setVal('textarea[name="aciklama"]', vo.aciklama);
-      message.success("Form deÄŸerleri iframe iÃ§ine aktarÄ±ldÄ± (deneysel)");
+      message.success("Form değerleri iframe içine aktarıldı (deneysel)");
     } catch (e) {
-      message.error("Iframe iÃ§ine yazÄ±lamadÄ±: " + (e as Error).message);
+      message.error("Iframe içine yazılamadı: " + (e as Error).message);
     }
   }
 
   function tryFillInIframeFromRow(row: Row | null) {
-    if (!row) return message.warning("LÃ¼tfen bir kalem seÃ§in");
+    if (!row) return message.warning("Lütfen bir kalem seçin");
     tryFillInIframe(mapToForm(row));
   }
 
@@ -124,9 +122,9 @@ export default function KalemlerFillPage() {
         <div className="flex items-center justify-between p-2">
           <div className="text-sm text-slate-600">Kalemler</div>
           <div className="flex items-center gap-8">
-            <div className="text-xs text-slate-400">Ã‡ift tÄ±kla â†’ satÄ±rÄ± seÃ§</div>
+            <div className="text-xs text-slate-400">Çift tıkla → satırı seç</div>
             <Space>
-              <Button type="primary" onClick={() => tryFillInIframeFromRow(selectedRow)}>SeÃ§ili SatÄ±rÄ± Webe Doldur</Button>
+              <Button type="primary" onClick={() => tryFillInIframeFromRow(selectedRow)}>Seçili Satırı Webe Doldur</Button>
             </Space>
           </div>
         </div>
@@ -171,9 +169,9 @@ export default function KalemlerFillPage() {
 
       <div className="bg-white rounded border border-slate-200 p-3">
         <div className="flex items-center justify-between mb-2">
-          <div className="font-medium">Web SayfasÄ±</div>
+          <div className="font-medium">Web Sayfası</div>
           <Button onClick={() => window.open("/api/proxy?url=" + encodeURIComponent("https://eortak.dtm.gov.tr/eortak/login/selectApplication.htm"), "_blank")}>
-            Yeni Pencerede AÃ§
+            Yeni Pencerede Aç
           </Button>
         </div>
         <div className="h-[520px] rounded overflow-hidden border">
@@ -184,8 +182,9 @@ export default function KalemlerFillPage() {
             className="w-full h-full"
           />
         </div>
-        <div className="text-xs text-slate-500 mt-2">Not: Proksi ile yÃ¼klenen sayfaya basit alan doldurma yapÄ±lÄ±r. GeliÅŸmiÅŸ doldurma iÃ§in alan seÃ§icileri hedef sayfaya gÃ¶re gÃ¼ncellenmelidir.</div>
+        <div className="text-xs text-slate-500 mt-2">Not: Proksi ile yüklenen sayfaya basit alan doldurma yapılır. Gelişmiş doldurma için alan seçicileri hedef sayfaya göre güncellenmelidir.</div>
       </div>
     </div>
   );
 }
+

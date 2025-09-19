@@ -50,7 +50,7 @@ export default function ParaIstemPage() {
     <div className="space-y-4">
       <div className="flex items-end gap-3 flex-wrap">
         <div className="min-w-[280px] flex-1">
-          <label className="block text-sm text-slate-600 mb-1">Master ID</label>
+          <label className="block text-sm font-medium text-slate-600 mb-1">Master ID</label>
           <Input value={masterId} onChange={(e) => setMasterId(e.target.value)} placeholder="Dosya masterId" />
         </div>
         <div className="flex-none">
@@ -141,3 +141,4 @@ export default function ParaIstemPage() {
     </div>
   );
 }
+

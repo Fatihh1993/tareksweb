@@ -158,12 +158,12 @@ export default function DosyaOzetPage() {
             <Button>Kalemlerle Doldur (Web)</Button>
           </Link>
           <Link href={`/tareks/para-istem?masterId=${encodeURIComponent(String(masterId))}`}>
-            <Button>Para Isteme</Button>
+            <Button>Para İsteme</Button>
           </Link>
         </Space>
       </div>
 
-      <Card title="Dosya Ozeti" loading={loading}>
+      <Card title="Dosya Özeti" loading={loading}>
         {error ? (
           <div className="text-red-600">{error}</div>
         ) : (
@@ -179,15 +179,15 @@ export default function DosyaOzetPage() {
               </div>
             </div>
             <div>
-              <div className="text-slate-500">Sube</div>
+              <div className="text-slate-500">Şube</div>
               <div className="font-medium">{summary.sube}</div>
             </div>
             <div>
-              <div className="text-slate-500">Belge Tur</div>
+              <div className="text-slate-500">Belge Tür</div>
               <div className="font-medium">{summary.belge}</div>
             </div>
             <div>
-              <div className="text-slate-500">Yil</div>
+              <div className="text-slate-500">Yıl</div>
               <div className="font-medium">{summary.yil}</div>
             </div>
             <div>
@@ -215,3 +215,4 @@ export default function DosyaOzetPage() {
     </div>
   );
 }
+
