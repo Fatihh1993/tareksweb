@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useParams } from "next/navigation";
 import Link from "next/link";
-import { Button, Card, Space, Tag, Table, Input, Tooltip, message } from "antd";
+import { Button, Card, Space, Tag, Table, Input, Tooltip, message, Modal, Checkbox } from "antd";
 import type { ColumnsType, ColumnType } from "antd/es/table";
 
 type Row = Record<string, unknown>;
@@ -54,15 +54,19 @@ export default function DosyaOzetPage() {
         const data = await res.json();
         if (!active) return;
         if (res.ok && Array.isArray(data.rows)) {
-          const match = data.rows.find((r: Row) => String(r["tareksmasterid"] ?? r["masterid"] ?? "") === String(masterId))
-            || data.rows[0] || null;
+          const match =
+            data.rows.find(
+              (r: Row) => String(r["tareksmasterid"] ?? r["masterid"] ?? "") === String(masterId)
+            ) || data.rows[0] || null;
           setSearchRow(match);
         }
       } catch {
         // ignore
       }
     })();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [ref, masterId]);
 
   const summary = useMemo(() => {
@@ -75,47 +79,83 @@ export default function DosyaOzetPage() {
     return { firma, durum, sube, belge, yil };
   }, [searchRow]);
 
-  function getRowKey(r: Row) {
+  // Inline edit state (same deneyim: Kalemleri Düzenle)
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [editBuffer, setEditBuffer] = useState<Row>({});
+
+  const [columnOrder, setColumnOrder] = useState<string[]>([]);
+  const [visibleColumns, setVisibleColumns] = useState<string[]>([]);
+  const [isConfigOpen, setConfigOpen] = useState(false);
+  const [draftOrder, setDraftOrder] = useState<string[]>([]);
+  const [draftSelection, setDraftSelection] = useState<string[]>([]);
+
+  const hiddenKeys = useMemo(() => new Set(["tareksmasterid", "beyannameid", "musteriid"]), []);
+
+  const availableColumnKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const row of detailRows) {
+      Object.keys(row).forEach((key) => {
+        if (!hiddenKeys.has(key)) keys.add(key);
+      });
+    }
+    return Array.from(keys);
+  }, [detailRows, hiddenKeys]);
+
+  useEffect(() => {
+    if (!availableColumnKeys.length) {
+      setColumnOrder([]);
+      setVisibleColumns([]);
+      return;
+    }
+    setColumnOrder((prev) => {
+      if (!prev.length) return availableColumnKeys;
+      const filtered = prev.filter((key) => availableColumnKeys.includes(key));
+      const appended = availableColumnKeys.filter((key) => !filtered.includes(key));
+      const next = [...filtered, ...appended];
+      return next.length === prev.length && next.every((k, i) => k === prev[i]) ? prev : next;
+    });
+    setVisibleColumns((prev) => {
+      if (!prev.length) return availableColumnKeys;
+      const filtered = prev.filter((key) => availableColumnKeys.includes(key));
+      if (!filtered.length) return availableColumnKeys;
+      return filtered.length === prev.length && filtered.every((k, i) => k === prev[i]) ? prev : filtered;
+    });
+  }, [availableColumnKeys]);
+
+  const getRowKey = useCallback((r: Row) => {
     return String(
       (r["referansno"] as string | undefined) ||
         (r["refid"] as string | undefined) ||
         (r["key"] as string | undefined) ||
         Math.random()
     );
-  }
-
-  // Inline edit state (same deneyim: Kalemleri Düzenle)
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  const [editBuffer, setEditBuffer] = useState<Row>({});
+  }, []);
 
   const detailColumns = useMemo<ColumnsType<Row>>(() => {
-    if (!detailRows || !detailRows[0]) return [];
-    const hidden = new Set(["tareksmasterid", "beyannameid", "musteriid"]);
-    const keySet = new Set<string>();
-    for (const r of detailRows) {
-      Object.keys(r).forEach((k) => { if (!hidden.has(k)) keySet.add(k); });
-    }
-    const keys = Array.from(keySet);
-    const cols: ColumnsType<Row> = keys
-      .filter((k) => !hidden.has(k))
-      .map((k) => ({
-        title: k,
-        dataIndex: k,
-        key: k,
-        width: 160,
-        render: (v: unknown, record: Row) => {
-          const rowKey = getRowKey(record);
-          const editing = selectedKey === rowKey;
-          if (!editing) return <span>{String(v ?? "")}</span>;
-          return (
-            <Input
-              size="small"
-              value={String((editBuffer[k] as string | number | undefined) ?? (v as string | number | undefined) ?? "")}
-              onChange={(e) => setEditBuffer((s) => ({ ...s, [k]: e.target.value }))}
-            />
-          );
-        },
-      })) as ColumnsType<Row>;
+    const activeKeys = columnOrder.filter((key) => visibleColumns.includes(key));
+    if (!activeKeys.length) return [];
+    const cols: ColumnsType<Row> = activeKeys.map((key) => ({
+      title: key,
+      dataIndex: key,
+      key,
+      width: 160,
+      render: (value: unknown, record: Row) => {
+        const rowKey = getRowKey(record);
+        const editing = selectedKey === rowKey;
+        if (!editing) return <span>{String(value ?? "")}</span>;
+        return (
+          <Input
+            size="small"
+            value={String(
+              (editBuffer[key] as string | number | undefined) ??
+                (value as string | number | undefined) ??
+                ""
+            )}
+            onChange={(e) => setEditBuffer((state) => ({ ...state, [key]: e.target.value }))}
+          />
+        );
+      },
+    })) as ColumnsType<Row>;
 
     const actionsCol: ColumnType<Row> = {
       title: "İşlemler",
@@ -128,13 +168,32 @@ export default function DosyaOzetPage() {
         return (
           <Space>
             {!editing ? (
-              <Button size="small" onClick={() => { setSelectedKey(rowKey); setEditBuffer(record); }}>Düzenle</Button>
+              <Button
+                size="small"
+                onClick={() => {
+                  setSelectedKey(rowKey);
+                  setEditBuffer(record);
+                }}
+              >
+                Düzenle
+              </Button>
             ) : (
               <>
                 <Tooltip title="Sunucu kaydetmesi için servis eklenecek">
-                  <Button size="small" type="primary" onClick={() => { message.info("Kaydet servisi eklenecek (placeholder)"); setSelectedKey(null); }}>Kaydet</Button>
+                  <Button
+                    size="small"
+                    type="primary"
+                    onClick={() => {
+                      message.info("Kaydet servisi eklenecek (placeholder)");
+                      setSelectedKey(null);
+                    }}
+                  >
+                    Kaydet
+                  </Button>
                 </Tooltip>
-                <Button size="small" onClick={() => setSelectedKey(null)}>İptal</Button>
+                <Button size="small" onClick={() => setSelectedKey(null)}>
+                  İptal
+                </Button>
               </>
             )}
           </Space>
@@ -143,7 +202,48 @@ export default function DosyaOzetPage() {
     };
     cols.push(actionsCol);
     return cols;
-  }, [detailRows, selectedKey, editBuffer]);
+  }, [columnOrder, visibleColumns, selectedKey, editBuffer, getRowKey]);
+
+  function openColumnConfig() {
+    if (!availableColumnKeys.length) return;
+    setDraftOrder(columnOrder.length ? [...columnOrder] : [...availableColumnKeys]);
+    setDraftSelection(visibleColumns.length ? [...visibleColumns] : [...availableColumnKeys]);
+    setConfigOpen(true);
+  }
+
+  function moveDraft(key: string, offset: number) {
+    setDraftOrder((prev) => {
+      const index = prev.indexOf(key);
+      if (index === -1) return prev;
+      const nextIndex = index + offset;
+      if (nextIndex < 0 || nextIndex >= prev.length) return prev;
+      const next = [...prev];
+      next.splice(index, 1);
+      next.splice(nextIndex, 0, key);
+      return next;
+    });
+  }
+
+  function toggleDraftSelection(key: string, checked: boolean) {
+    setDraftSelection((prev) => {
+      if (checked) {
+        if (prev.includes(key)) return prev;
+        return [...prev, key];
+      }
+      return prev.filter((item) => item !== key);
+    });
+  }
+
+  function handleConfigSave() {
+    if (!draftSelection.length) {
+      message.warning("En az bir alan seçmelisiniz.");
+      return;
+    }
+    const orderedSelection = draftOrder.filter((key) => draftSelection.includes(key));
+    setColumnOrder([...draftOrder]);
+    setVisibleColumns([...orderedSelection]);
+    setConfigOpen(false);
+  }
 
   return (
     <div className="space-y-6">
@@ -154,7 +254,11 @@ export default function DosyaOzetPage() {
           <div className="text-xs text-slate-400 mt-1">Master ID: {String(masterId)}</div>
         </div>
         <Space wrap>
-          <Link href={`/tareks/dosya/${encodeURIComponent(String(masterId))}/kalemler/fill${ref ? `?ref=${encodeURIComponent(ref)}` : ""}`}>
+          <Link
+            href={`/tareks/dosya/${encodeURIComponent(String(masterId))}/kalemler/fill${
+              ref ? `?ref=${encodeURIComponent(ref)}` : ""
+            }`}
+          >
             <Button>Kalemlerle Doldur (Web)</Button>
           </Link>
           <Link href={`/tareks/para-istem?masterId=${encodeURIComponent(String(masterId))}`}>
@@ -199,7 +303,16 @@ export default function DosyaOzetPage() {
       </Card>
 
       <Card title="Tareks Detay">
-        <div className="text-sm text-slate-500 mb-2">Kalemler üzerinde hızlı düzenleme yapabilirsiniz.</div>
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-2">
+          <div className="text-sm text-slate-500">Kalemler üzerinde hızlı düzenleme yapabilirsiniz.</div>
+          {visibleColumns.length > 0 && (
+            <Space>
+              <Button size="small" onClick={openColumnConfig}>
+                Kolonları Özelleştir
+              </Button>
+            </Space>
+          )}
+        </div>
         <div className="bg-white rounded border border-slate-100">
           <Table
             size="small"
@@ -212,7 +325,58 @@ export default function DosyaOzetPage() {
           />
         </div>
       </Card>
+
+      <Modal
+        open={isConfigOpen}
+        title="Kolonları Özelleştir"
+        okText="Kaydet"
+        cancelText="Kapat"
+        onCancel={() => setConfigOpen(false)}
+        onOk={handleConfigSave}
+      >
+        <div className="space-y-2">
+          {draftOrder.length ? (
+            draftOrder.map((key, index) => (
+              <div
+                key={key}
+                className="flex items-center justify-between gap-3 rounded border border-slate-200 px-2 py-1"
+              >
+                <Checkbox
+                  checked={draftSelection.includes(key)}
+                  onChange={(e) => toggleDraftSelection(key, e.target.checked)}
+                >
+                  <span className="font-mono text-xs sm:text-sm">{key}</span>
+                </Checkbox>
+                <div className="flex items-center gap-1">
+                  <Button size="small" onClick={() => moveDraft(key, -1)} disabled={index === 0}>
+                    ↑
+                  </Button>
+                  <Button
+                    size="small"
+                    onClick={() => moveDraft(key, 1)}
+                    disabled={index === draftOrder.length - 1}
+                  >
+                    ↓
+                  </Button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="text-sm text-slate-500">Gösterilecek kolon bulunamadı.</div>
+          )}
+          {draftOrder.length ? (
+            <div className="flex items-center justify-between pt-1">
+              <Button type="link" size="small" onClick={() => setDraftSelection([...draftOrder])}>
+                Tümünü Seç
+              </Button>
+              <Button type="link" size="small" onClick={() => setDraftSelection([])}>
+                Tümünü Kaldır
+              </Button>
+            </div>
+          ) : null}
+          <div className="text-xs text-slate-500">Not: İşlemler alanı her zaman gösterilir.</div>
+        </div>
+      </Modal>
     </div>
   );
 }
-
