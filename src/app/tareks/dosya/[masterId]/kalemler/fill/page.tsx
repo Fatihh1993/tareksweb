@@ -52,10 +52,29 @@ export default function KalemlerFillPage() {
   const cols = useMemo<ColumnsType<Row>>(() => {
     const hidden = new Set(["tareksmasterid", "beyannameid", "musteriid"]);
     const first = rows[0] || {};
-    return Object.keys(first)
-      .filter((k) => !hidden.has(k))
-      .slice(0, 10) // show top 10 for compact grid
-      .map((k) => ({ title: k, dataIndex: k, key: k, width: 160 })) as ColumnsType<Row>;
+    const keys = Object.keys(first).filter((k) => !hidden.has(k)).slice(0, 10);
+    const fillCol = {
+      title: '',
+      key: 'doldur',
+      fixed: 'left' as const,
+      width: 80,
+      render: (_: unknown, record: Row) => {
+        return (
+          <Button
+            size="small"
+            type="primary"
+            onClick={() => {
+              setSelectedKey(getKey(record));
+              tryFillInIframeFromRow(record);
+            }}
+          >
+            Doldur
+          </Button>
+        );
+      },
+    };
+    const dataCols = keys.map((k) => ({ title: k, dataIndex: k, key: k, width: 160 }));
+    return [fillCol, ...dataCols] as ColumnsType<Row>;
   }, [rows]);
 
   function getKey(r: Row) {
@@ -123,9 +142,6 @@ export default function KalemlerFillPage() {
           <div className="text-sm text-slate-600">Kalemler</div>
           <div className="flex items-center gap-8">
             <div className="text-xs text-slate-400">Çift tıkla → satırı seç</div>
-            <Space>
-              <Button type="primary" onClick={() => tryFillInIframeFromRow(selectedRow)}>Seçili Satırı Webe Doldur</Button>
-            </Space>
           </div>
         </div>
         {error && <div className="text-red-600 text-sm px-2">{error}</div>}
@@ -140,7 +156,7 @@ export default function KalemlerFillPage() {
           onRow={(record) => ({
             onClick: () => setSelectedKey(record.key as string),
           })}
-          rowClassName={(rec) => (rec.key === selectedKey ? "tareks-row-selected" : "")}
+          rowClassName={(rec) => (rec.key === selectedKey ? "bg-sky-100" : "")}
         />
         </div>
         <div

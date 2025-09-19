@@ -116,7 +116,6 @@ export default function DosyaOzetPage() {
           );
         },
       })) as ColumnsType<Row>;
-
     const actionsCol: ColumnType<Row> = {
       title: "İşlemler",
       key: "actions",
@@ -208,7 +207,7 @@ export default function DosyaOzetPage() {
             scroll={{ x: "max-content", y: 520 }}
             pagination={{ pageSize: 50, showSizeChanger: true }}
             onRow={(record) => ({ onClick: () => setSelectedKey(record.key as string) })}
-            rowClassName={(rec) => (rec.key === selectedKey ? "bg-amber-50" : "")}
+            rowClassName={(rec) => (rec.key === selectedKey ? "bg-sky-100" : "")}
           />
         </div>
       </Card>
