@@ -1,5 +1,6 @@
 "use client";
 
+import "@/lib/antd-compat";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { Button, Input, Space, Table, Tooltip, message } from "antd";

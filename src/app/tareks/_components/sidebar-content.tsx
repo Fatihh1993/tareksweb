@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import "@/lib/antd-compat";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";

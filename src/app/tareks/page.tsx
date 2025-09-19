@@ -1,5 +1,6 @@
 "use client";
 
+import "@/lib/antd-compat";
 import React, { useMemo, useState } from "react";
 import { Table, Input, Select, Button, Space, Tag, Tooltip, message } from "antd";
 import type { ColumnsType } from "antd/es/table";

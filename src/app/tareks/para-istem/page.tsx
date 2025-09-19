@@ -1,5 +1,6 @@
 "use client";
 
+import "@/lib/antd-compat";
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button, Input, Select, Table, message, Modal, Form } from "antd";
