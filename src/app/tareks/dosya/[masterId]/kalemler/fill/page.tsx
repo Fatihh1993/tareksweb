@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import { Button, Space, Table, message } from "antd";
+import { Button, Table, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 
 type Row = Record<string, unknown>;
@@ -23,7 +23,7 @@ export default function KalemlerFillPage() {
   const startYRef = useRef(0);
   const startHRef = useRef(120);
   const [tableHeight, setTableHeight] = useState<number>(120);
-  const [mode, setMode] = useState<'proxy' | 'direct'>('proxy');
+  const [mode] = useState<'proxy' | 'direct'>('proxy');
 
   useEffect(() => {
     let active = true;
@@ -52,11 +52,36 @@ export default function KalemlerFillPage() {
   const cols = useMemo<ColumnsType<Row>>(() => {
     const hidden = new Set(["tareksmasterid", "beyannameid", "musteriid"]);
     const first = rows[0] || {};
-    return Object.keys(first)
+    const baseCols = Object.keys(first)
       .filter((k) => !hidden.has(k))
       .slice(0, 10) // show top 10 for compact grid
-      .map((k) => ({ title: k, dataIndex: k, key: k, width: 160 })) as ColumnsType<Row>;
-  }, [rows]);
+      .map((k) => ({ title: k, dataIndex: k, key: k, width: 160 }));
+
+    return [
+      {
+        title: "",
+        key: "__fill__",
+        width: 96,
+        render: (_: unknown, record) => {
+          const key = getKey(record);
+          return (
+            <Button
+              size="small"
+              type="primary"
+              onClick={(event) => {
+                event.stopPropagation();
+                setSelectedKey(key);
+                tryFillInIframeFromRow(record);
+              }}
+            >
+              Webe Doldur
+            </Button>
+          );
+        },
+      },
+      ...baseCols,
+    ] as ColumnsType<Row>;
+  }, [rows, tryFillInIframeFromRow, setSelectedKey]);
 
   function getKey(r: Row) {
     return String(
@@ -80,52 +105,55 @@ export default function KalemlerFillPage() {
     } as Record<string, unknown>;
   }, [refId]);
 
-  function tryFillInIframe(values?: Record<string, unknown>) {
-    if (mode !== 'proxy') {
-      message.warning('Doldurma sadece Proxy modunda mümkündür');
-      return;
-    }
-    const iframe = iframeRef.current;
-    if (!iframe || !iframe.contentWindow) return message.warning("Sayfa yüklenmedi");
-    try {
-      const doc = iframe.contentWindow.document;
-      const vals = values || (selectedRow ? mapToForm(selectedRow) : {});
-      const vo = vals as Record<string, unknown>;
-      const setVal = (sel: string, val: unknown) => {
-        const el = doc.querySelector(sel) as (HTMLInputElement | HTMLTextAreaElement | null);
-        if (!el) return;
-        if ("value" in el) {
-          (el as HTMLInputElement | HTMLTextAreaElement).value = String(val ?? "");
-          el.dispatchEvent(new Event("input", { bubbles: true }));
-        }
-      };
-      // Best-effort: adjust selectors as needed on target page
-      setVal('input[name="gtip"]', vo.gtip);
-      setVal('input[name="miktar"]', vo.miktar);
-      setVal('input[name="birim"]', vo.birim);
-      setVal('input[name="mense"]', vo.mense);
-      setVal('textarea[name="aciklama"]', vo.aciklama);
-      message.success("Form değerleri iframe içine aktarıldı (deneysel)");
-    } catch (e) {
-      message.error("Iframe içine yazılamadı: " + (e as Error).message);
-    }
-  }
+  const tryFillInIframe = useCallback(
+    (values?: Record<string, unknown>) => {
+      if (mode !== 'proxy') {
+        message.warning('Doldurma sadece Proxy modunda mümkündür');
+        return;
+      }
+      const iframe = iframeRef.current;
+      if (!iframe || !iframe.contentWindow) return message.warning("Sayfa yüklenmedi");
+      try {
+        const doc = iframe.contentWindow.document;
+        const vals = values || (selectedRow ? mapToForm(selectedRow) : {});
+        const vo = vals as Record<string, unknown>;
+        const setVal = (sel: string, val: unknown) => {
+          const el = doc.querySelector(sel) as HTMLInputElement | HTMLTextAreaElement | null;
+          if (!el) return;
+          if ("value" in el) {
+            (el as HTMLInputElement | HTMLTextAreaElement).value = String(val ?? "");
+            el.dispatchEvent(new Event("input", { bubbles: true }));
+          }
+        };
+        // Best-effort: adjust selectors as needed on target page
+        setVal('input[name="gtip"]', vo.gtip);
+        setVal('input[name="miktar"]', vo.miktar);
+        setVal('input[name="birim"]', vo.birim);
+        setVal('input[name="mense"]', vo.mense);
+        setVal('textarea[name="aciklama"]', vo.aciklama);
+        message.success("Form değerleri iframe içine aktarıldı (deneysel)");
+      } catch (e) {
+        message.error("Iframe içine yazılamadı: " + (e as Error).message);
+      }
+    },
+    [mapToForm, mode, selectedRow]
+  );
 
-  function tryFillInIframeFromRow(row: Row | null) {
-    if (!row) return message.warning("Lütfen bir kalem seçin");
-    tryFillInIframe(mapToForm(row));
-  }
+  const tryFillInIframeFromRow = useCallback(
+    (row: Row | null) => {
+      if (!row) return message.warning("Lütfen bir kalem seçin");
+      tryFillInIframe(mapToForm(row));
+    },
+    [mapToForm, tryFillInIframe]
+  );
 
   return (
     <div className="space-y-4">
       <div className="bg-white rounded border border-slate-200 p-2 tareks-compact">
         <div className="flex items-center justify-between p-2">
           <div className="text-sm text-slate-600">Kalemler</div>
-          <div className="flex items-center gap-8">
-            <div className="text-xs text-slate-400">Çift tıkla → satırı seç</div>
-            <Space>
-              <Button type="primary" onClick={() => tryFillInIframeFromRow(selectedRow)}>Seçili Satırı Webe Doldur</Button>
-            </Space>
+          <div className="text-xs text-slate-400 text-right">
+            Kalemlerin solundaki butona basarak satırı web formuna aktarabilirsiniz.
           </div>
         </div>
         {error && <div className="text-red-600 text-sm px-2">{error}</div>}
