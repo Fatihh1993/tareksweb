@@ -25,7 +25,6 @@ export function buildSdiTareksparaistemeInsertQuery(values: SdiTareksparaistemeI
       kdvoran: values.kdvoran ?? null,
       tahakkukno: values.tahakkukno ?? null,
       insuser: values.insuser ?? null,
-      // instime: db.raw('GETDATE()') // eğer gerekli ise Kysely helper'ına göre burayı aç
     })
     .returning('tareksparaistemeid')
     .compile();
