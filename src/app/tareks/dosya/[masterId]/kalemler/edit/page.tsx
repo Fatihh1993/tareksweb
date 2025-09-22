@@ -1,175 +1,298 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
-import { Button, Input, Space, Table, Tooltip, message } from "antd";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useParams, useSearchParams } from "next/navigation"; // <-- eklendi
+import { Button, Card, Input, Space, Table, Tag } from "antd"; // + Tag
 import type { ColumnsType, ColumnType } from "antd/es/table";
 
 type Row = Record<string, unknown>;
 
+const HIDE_KEYS = new Set([
+  "tareksmasterid",
+  "masterid",
+  "MasterId",
+  "MasterID",
+  "beyannameid",
+  "musteriid",
+]);
+
 export default function KalemlerEditPage() {
   const params = useParams<{ masterId: string }>();
   const masterId = params?.masterId as string;
+  const searchParams = useSearchParams(); // <-- eklendi
 
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  const [editBuffer, setEditBuffer] = useState<Row>({});
+
+  // simple column filters
+  const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
+  const applyFilter = useCallback((field: string, value: string) => {
+    setColumnFilters((prev) => {
+      const v = value.trim();
+      const next = { ...prev };
+      if (!v) delete next[field];
+      else next[field] = v;
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
-    let active = true;
+    let alive = true;
     (async () => {
-      setError(null);
       setLoading(true);
+      setError(null);
       try {
-        const res = await fetch(`/api/tareksdetay?id=${encodeURIComponent(String(masterId))}`);
+        // fetch detay rows by masterId
+        const res = await fetch(`/api/tareks/detay?id=${encodeURIComponent(masterId)}`, { cache: "no-store" });
         const data = await res.json();
-        if (!active) return;
-        if (res.ok) setRows((data.rows as Row[]) || []);
-        else setError(data.error || "Detay alınamadı");
+        if (!alive) return;
+        if (!res.ok) throw new Error(data?.detail || data?.error || "Detay alınamadı");
+        setRows((data?.rows as Row[]) ?? []);
       } catch (e) {
-        if (!active) return;
-        const msg = e instanceof Error ? e.message : String(e);
-        setError("Sunucu hatası: " + msg);
+        if (!alive) return;
+        setError(e instanceof Error ? e.message : String(e));
       } finally {
-        if (active) setLoading(false);
+        if (alive) setLoading(false);
       }
     })();
     return () => {
-      active = false;
+      alive = false;
     };
   }, [masterId]);
 
+  const filteredRows = useMemo(() => {
+    const active = Object.entries(columnFilters).filter(([, v]) => v.trim());
+    if (!active.length) return rows;
+    return rows.filter((r) =>
+      active.every(([k, v]) => {
+        const src = r[k];
+        if (src === undefined || src === null) return false;
+        return String(src).toLowerCase().includes(v.toLowerCase());
+      })
+    );
+  }, [rows, columnFilters]);
+
+  const headerWithFilter = useCallback(
+    (label: string, key: string) => (
+      <div className="col-header">
+        <div className="text-xs text-slate-500 mb-1">{label}</div>
+        <Input
+          size="small"
+          allowClear
+          value={columnFilters[key] ?? ""}
+          onChange={(e) => applyFilter(key, e.target.value)}
+        />
+      </div>
+    ),
+    [columnFilters, applyFilter]
+  );
+
   const columns = useMemo<ColumnsType<Row>>(() => {
-    const hidden = new Set(["tareksmasterid", "beyannameid", "musteriid"]);
-    const first = rows[0] || {};
-    const keys = Object.keys(first).filter((k) => !hidden.has(k));
+    // discover keys from data and hide ID-like ones
+    const keys = Array.from(
+      rows.reduce<Set<string>>((set, r) => {
+        Object.keys(r).forEach((k) => {
+          if (!HIDE_KEYS.has(k)) set.add(k);
+        });
+        return set;
+      }, new Set<string>())
+    );
+
     const cols: ColumnsType<Row> = keys.map((k) => ({
-      title: k,
+      title: headerWithFilter(k, k),
       dataIndex: k,
       key: k,
-      width: 160,
-      render: (v: unknown, record: Row) => {
-        const rowKey = getRowKey(record);
-        const editing = selectedKey === rowKey;
-        if (!editing) return <span>{String(v ?? "")}</span>;
-        return (
-          <Input
-            size="small"
-            value={String((editBuffer[k] as string | number | undefined) ?? (v as string | number | undefined) ?? "")}
-            onChange={(e) => setEditBuffer((s) => ({ ...s, [k]: e.target.value }))}
-          />
-        );
-      },
-    })) as ColumnsType<Row>;
+      width: 180,
+      render: (v: unknown) => <span>{String(v ?? "")}</span>,
+    }));
+
     const actionsCol: ColumnType<Row> = {
       title: "İşlemler",
       key: "actions",
-      fixed: "right" as const,
-      width: 160,
-      render: (_: unknown, record: Row) => {
-        const rowKey = getRowKey(record);
-        const editing = selectedKey === rowKey;
-        return (
-          <Space>
-            {!editing ? (
-              <Button size="small" onClick={() => {
-                setSelectedKey(rowKey);
-                setEditBuffer(record);
-              }}>Düzenle</Button>
-            ) : (
-              <>
-                <Button size="small" type="primary" onClick={() => {
-                  message.info("Kaydet servisi eklenecek (placeholder)");
-                  setSelectedKey(null);
-                }}>Kaydet</Button>
-                <Button size="small" onClick={() => setSelectedKey(null)}>İptal</Button>
-              </>
-            )}
-          </Space>
-        );
-      },
+      fixed: "right",
+      width: 120,
+      render: () => (
+        <Space>
+          <Button size="small">Düzenle</Button>
+        </Space>
+      ),
     };
     cols.push(actionsCol);
     return cols;
-  }, [rows, selectedKey, editBuffer]);
+  }, [rows, headerWithFilter]);
+
+  // Arama sayfasındaki renkler
+  const durumColors: Record<string, string> = {
+    "Başvuru Sonuçlandı": "green",
+    "Koşullu Kabul": "green",
+    "RED Denetleme Sonucu": "red",
+    "Eksik Evrak - Hatalı Form": "red",
+    "Form Oluşturuluyor": "gold",
+    "Gümrük Müşaviri Kontrolü": "gold",
+    "Ön İnceleme": "gold",
+    "Muhasebe": "gold",
+    "Tareks Müracaat": "gold",
+    "Tareks Denetleme": "gold",
+    "Denetim Sonucu Bekleniyor": "gold",
+    "TSE Denetleme": "gold",
+    "TSE Evrak Yükleme": "gold",
+    "TSE Heyet Aşaması": "gold",
+    "TSE Heyet Sonrası Teknik İnceleme": "gold",
+    "TSE Ön İnceleme": "gold",
+  };
+
+  // Tüm satırlar üzerinde akıllı alan bulucu (metin alanlarına öncelik ver; boolean-like'ları yok say)
+  function scanForValue(
+    allRows: Row[],
+    candidates: string[],
+    opts?: { ignoreBooleanLike?: boolean }
+  ): string {
+    if (!allRows.length) return "";
+    const cand = candidates.map((c) => c.toLowerCase());
+
+    // 1) Önce tam eşleşme
+    for (const c of cand) {
+      for (const row of allRows) {
+        const keys = Object.keys(row);
+        for (const key of keys) {
+          if (key.toLowerCase() === c) {
+            const v = row[key];
+            if (v !== null && v !== undefined) {
+              const s = String(v).trim();
+              const sl = s.toLowerCase();
+              if (opts?.ignoreBooleanLike && (sl === "true" || sl === "false" || sl === "1" || sl === "0")) {
+                continue;
+              }
+              if (sl !== "null" && sl !== "undefined" && s) return s;
+            }
+          }
+        }
+      }
+    }
+
+    // 2) Sonra kısmi eşleşme
+    for (const row of allRows) {
+      for (const key of Object.keys(row)) {
+        const lk = key.toLowerCase();
+        if (cand.some((c) => lk.includes(c))) {
+          const v = row[key];
+          if (v !== null && v !== undefined) {
+            const s = String(v).trim();
+            const sl = s.toLowerCase();
+            if (opts?.ignoreBooleanLike && (sl === "true" || sl === "false" || sl === "1" || sl === "0")) {
+              continue;
+            }
+            if (sl !== "null" && sl !== "undefined" && s) return s;
+          }
+        }
+      }
+    }
+    return "";
+  }
+
+  // Üst bilgi alanları: önce querystring, sonra satırlardan tara
+  const companyName = useMemo(() => {
+    const fromQS = (searchParams.get("firma") ?? "").trim();
+    if (fromQS) return fromQS;
+    const v = scanForValue(
+      rows,
+      ["musteriad", "musteri", "firmaadi", "firmaad", "firma", "unvan"],
+      { ignoreBooleanLike: true }
+    );
+    return v || "-";
+  }, [rows, searchParams]);
+
+  const durumName = useMemo(() => {
+    const fromQS = (searchParams.get("durum") ?? "").trim();
+    if (fromQS) return fromQS;
+    // sadece gerçek durum alanlarını tara; boolean/statü türlerini alma
+    const v = scanForValue(rows, ["durumad", "durumadi", "durum"], {
+      ignoreBooleanLike: true,
+    });
+    return v || "-";
+  }, [rows, searchParams]);
+
+  const sube = useMemo(() => {
+    const fromQS = (searchParams.get("sube") ?? "").trim();
+    if (fromQS) return fromQS;
+    const v = scanForValue(rows, ["subeadi", "sube", "branch"], {
+      ignoreBooleanLike: true,
+    });
+    return v || "-";
+  }, [rows, searchParams]);
+
+  const belgeTur = useMemo(() => {
+    const fromQS = (searchParams.get("belgetur") ?? "").trim();
+    if (fromQS) return fromQS;
+    const v = scanForValue(rows, ["belgeturad", "belgetur", "belgeturu"], {
+      ignoreBooleanLike: true,
+    });
+    return v || "-";
+  }, [rows, searchParams]);
+
+  const yil = useMemo(() => {
+    const fromQS = (searchParams.get("yil") ?? "").trim();
+    if (fromQS) return fromQS;
+    const v = scanForValue(rows, ["yil", "year"], { ignoreBooleanLike: true });
+    return v || "-";
+  }, [rows, searchParams]);
 
   function getRowKey(r: Row) {
     return String(
-      (r["referansno"] as string | undefined) ||
-        (r["refid"] as string | undefined) ||
-        (r["key"] as string | undefined) ||
-        Math.random()
+      r["referansno"] ?? r["refid"] ?? r["rowid"] ?? r["key"] ?? Math.random()
     );
   }
 
-  const selectedRow = useMemo(() => rows.find((r) => getRowKey(r) === selectedKey) || null, [rows, selectedKey]);
-
-  function toCSV(items: Row[]) {
-    if (!items.length) return "";
-    const headers = Object.keys(items[0]);
-    const lines = [headers.join(",")];
-    for (const it of items) {
-      const line = headers.map((h) => {
-        const raw = it[h];
-        const s = raw === null || raw === undefined ? "" : String(raw);
-        const needsQuote = s.includes(",") || s.includes("\n") || s.includes("\"");
-        return needsQuote ? `"${s.replace(/\"/g, '""')}` + '"' : s;
-      }).join(",");
-      lines.push(line);
-    }
-    return lines.join("\n");
-  }
+  // küçük bilgi öğesi (value artık ReactNode)
+  const InfoItem = ({
+    label,
+    value,
+    strong = false,
+  }: { label: string; value: React.ReactNode; strong?: boolean }) => (
+    <div className="inline-flex flex-col gap-1 shrink-0 min-w-[200px]">
+      <div className="text-xs text-slate-500">{label}</div>
+      <div className="text-slate-800" style={strong ? { fontWeight: 700 } : undefined}>
+        {value}
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="text-xs text-slate-500">Master ID</div>
-          <div className="font-semibold">{String(masterId)}</div>
-        </div>
-        <Space>
-          <Tooltip title="Seçili satırdaki GTIP bilgisini kopyalar (alan adı: gtip)">
-            <Button
-              disabled={!selectedRow || !("gtip" in (selectedRow || {}))}
-              onClick={() => {
-                const val = String((selectedRow as Row)["gtip"] ?? "");
-                navigator.clipboard.writeText(val);
-                message.success("GTIP panoya kopyalandı");
-              }}
-            >GTIP Kopyala</Button>
-          </Tooltip>
-          <Button onClick={() => {
-            const csv = toCSV(rows);
-            const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `kalemler-${masterId}.csv`;
-            a.click();
-            URL.revokeObjectURL(url);
-          }}>Excel (CSV)</Button>
-          <Button disabled>XML İndir</Button>
-          <Button disabled>Arşiv İndir</Button>
-        </Space>
+      {/* üst sağ buton */}
+      <div className="flex justify-end">
+        <Button type="primary">Kalemleri doldur</Button>
       </div>
-      {error && <div className="text-red-600 text-sm">{error}</div>}
 
-      <div className="bg-white rounded border border-slate-200">
+      {/* Üst bilgi: tek satır */}
+      <Card size="small" bodyStyle={{ padding: 16 }}>
+        <div className="overflow-x-auto">
+          <div className="flex items-start gap-8 whitespace-nowrap">
+            <InfoItem label="Firma" value={companyName} strong />
+            <InfoItem
+              label="Durum"
+              value={<Tag color={durumColors[durumName] ?? "default"}>{durumName}</Tag>}
+            />
+            <InfoItem label="Şube" value={sube} />
+            <InfoItem label="Belge Tür" value={belgeTur} />
+            <InfoItem label="Yıl" value={yil} />
+          </div>
+        </div>
+      </Card>
+
+      <Card size="small" title="Detay" bodyStyle={{ padding: 0 }}>
         <Table
           size="small"
           loading={loading}
-          dataSource={rows.map((r) => ({ key: getRowKey(r), ...r }))}
+          dataSource={filteredRows.map((r) => ({ key: getRowKey(r), ...r }))}
           columns={columns}
           scroll={{ x: "max-content", y: 520 }}
           pagination={{ pageSize: 50 }}
-          onRow={(record) => ({
-            onClick: () => setSelectedKey(record.key as string),
-          })}
-          rowClassName={(rec) => (rec.key === selectedKey ? "bg-amber-50" : "")}
         />
-      </div>
+      </Card>
+
+      {error && <div className="text-red-600 text-sm">{error}</div>}
     </div>
   );
 }

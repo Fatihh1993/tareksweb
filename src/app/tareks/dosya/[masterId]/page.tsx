@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useParams } from "next/navigation";
 import Link from "next/link";
 import { Button, Card, Space, Tag, Table, Input, Tooltip, message } from "antd";
@@ -8,7 +8,7 @@ import type { ColumnsType, ColumnType } from "antd/es/table";
 
 type Row = Record<string, unknown>;
 
-export default function DosyaOzetPage() {
+export default function DosyaDetayPage() {
   const params = useParams<{ masterId: string }>();
   const searchParams = useSearchParams();
   const masterId = params?.masterId;
@@ -18,6 +18,7 @@ export default function DosyaOzetPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchRow, setSearchRow] = useState<Row | null>(null);
+  const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let active = true;
@@ -30,11 +31,11 @@ export default function DosyaOzetPage() {
         const data = await res.json();
         if (!active) return;
         if (res.ok) setDetailRows((data.rows as Row[]) || []);
-        else setError(data.error || "Detay alınamadı");
+        else setError(data.error || "Detay alinamadi");
       } catch (e) {
         if (!active) return;
         const msg = e instanceof Error ? e.message : String(e);
-        setError("Sunucu hatası: " + msg);
+        setError("Sunucu hatasi: " + msg);
       } finally {
         if (active) setLoading(false);
       }
@@ -44,7 +45,6 @@ export default function DosyaOzetPage() {
     };
   }, [masterId]);
 
-  // fetch a single summary row from search results (by referans)
   useEffect(() => {
     let active = true;
     (async () => {
@@ -54,26 +54,56 @@ export default function DosyaOzetPage() {
         const data = await res.json();
         if (!active) return;
         if (res.ok && Array.isArray(data.rows)) {
-          const match = data.rows.find((r: Row) => String(r["tareksmasterid"] ?? r["masterid"] ?? "") === String(masterId))
-            || data.rows[0] || null;
+          const match =
+            data.rows.find(
+              (r: Row) => String(r["tareksmasterid"] ?? r["masterid"] ?? "") === String(masterId)
+            ) || data.rows[0] || null;
           setSearchRow(match);
         }
       } catch {
         // ignore
       }
     })();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [ref, masterId]);
 
+
   const summary = useMemo(() => {
-    const s = searchRow || {};
-    const firma = String((s as Row)["musteriad"] ?? "-");
-    const durum = String((s as Row)["durum"] ?? "-");
-    const sube = String((s as Row)["subeadi"] ?? "-");
-    const belge = String((s as Row)["belgeturad"] ?? "-");
-    const yil = String((s as Row)["yil"] ?? "-");
-    return { firma, durum, sube, belge, yil };
-  }, [searchRow]);
+    const source = (searchRow ?? detailRows[0]) as Row | undefined;
+    const pick = (keys: string[]): string => {
+      if (!source) return "-";
+      for (const key of keys) {
+        const value = source?.[key];
+        if (value !== undefined && value !== null) {
+          const text = String(value).trim();
+          if (text.length) return text;
+        }
+      }
+      return "-";
+    };
+    return {
+      firma: pick(["musteriad", "firma", "firmaad", "firmaadi", "MUSTERIAD", "MUSTERAD", "FIRMA", "FIRMAAD", "FIRMAADI"]),
+      durum: pick(["durum", "Durum", "DURUM"]),
+      sube: pick(["subeadi", "sube", "SUBEADI", "SUBE"]),
+      belge: pick(["belgeturad", "belge", "belgetur", "BELGETURAD", "BELGE"]),
+      yil: pick(["yil", "YIL", "Yil"]),
+      referans: pick(["referansno", "refid", "REFERANSNO", "REFID"]),
+    };
+  }, [searchRow, detailRows]);
+  const displayRef = summary.referans !== "-" ? summary.referans : (ref ?? null);
+  const applyFilter = useCallback((field: string, value: string) => {
+    setColumnFilters((prev) => {
+      const next = { ...prev };
+      if (value.trim().length === 0) {
+        delete next[field];
+      } else {
+        next[field] = value;
+      }
+      return next;
+    });
+  }, []);
 
   function getRowKey(r: Row) {
     return String(
@@ -84,40 +114,71 @@ export default function DosyaOzetPage() {
     );
   }
 
-  // Inline edit state (same deneyim: Kalemleri Düzenle)
+  const filteredDetailRows = useMemo(() => {
+    const active = Object.entries(columnFilters).filter(([, value]) => value.trim().length > 0);
+    if (!active.length) return detailRows;
+    return detailRows.filter((row) =>
+      active.every(([key, value]) => {
+        const source = row[key];
+        if (source === undefined || source === null) return false;
+        return String(source).toLowerCase().includes(value.trim().toLowerCase());
+      })
+    );
+  }, [detailRows, columnFilters]);
+
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [editBuffer, setEditBuffer] = useState<Row>({});
 
+  const headerWithFilter = useCallback(
+    (label: string) => (
+      <div className="col-header">
+        <span>{label}</span>
+        <Input
+          size="small"
+          allowClear
+          value={columnFilters[label] ?? ""}
+          onChange={(e) => applyFilter(label, e.target.value)}
+        />
+      </div>
+    ),
+    [columnFilters, applyFilter]
+  );
+
   const detailColumns = useMemo<ColumnsType<Row>>(() => {
-    if (!detailRows || !detailRows[0]) return [];
+    if (!detailRows || !detailRows.length) return [];
     const hidden = new Set(["tareksmasterid", "beyannameid", "musteriid"]);
     const keySet = new Set<string>();
     for (const r of detailRows) {
-      Object.keys(r).forEach((k) => { if (!hidden.has(k)) keySet.add(k); });
+      Object.keys(r).forEach((k) => {
+        if (!hidden.has(k)) keySet.add(k);
+      });
     }
     const keys = Array.from(keySet);
-    const cols: ColumnsType<Row> = keys
-      .filter((k) => !hidden.has(k))
-      .map((k) => ({
-        title: k,
-        dataIndex: k,
-        key: k,
-        width: 160,
-        render: (v: unknown, record: Row) => {
-          const rowKey = getRowKey(record);
-          const editing = selectedKey === rowKey;
-          if (!editing) return <span>{String(v ?? "")}</span>;
-          return (
-            <Input
-              size="small"
-              value={String((editBuffer[k] as string | number | undefined) ?? (v as string | number | undefined) ?? "")}
-              onChange={(e) => setEditBuffer((s) => ({ ...s, [k]: e.target.value }))}
-            />
-          );
-        },
-      })) as ColumnsType<Row>;
+    const cols: ColumnsType<Row> = keys.map((k) => ({
+      title: headerWithFilter(k),
+      dataIndex: k,
+      key: k,
+      width: 160,
+      render: (value: unknown, record: Row) => {
+        const rowKey = getRowKey(record);
+        const editing = selectedKey === rowKey;
+        if (!editing) return <span>{String(value ?? "")}</span>;
+        return (
+          <Input
+            size="small"
+            value={String(
+              (editBuffer[k] as string | number | undefined) ??
+                (value as string | number | undefined) ??
+                ""
+            )}
+            onChange={(e) => setEditBuffer((state) => ({ ...state, [k]: e.target.value }))}
+          />
+        );
+      },
+    })) as ColumnsType<Row>;
+
     const actionsCol: ColumnType<Row> = {
-      title: "İşlemler",
+      title: "Islemler",
       key: "actions",
       fixed: "right",
       width: 160,
@@ -127,13 +188,32 @@ export default function DosyaOzetPage() {
         return (
           <Space>
             {!editing ? (
-              <Button size="small" onClick={() => { setSelectedKey(rowKey); setEditBuffer(record); }}>Düzenle</Button>
+              <Button
+                size="small"
+                onClick={() => {
+                  setSelectedKey(rowKey);
+                  setEditBuffer(record);
+                }}
+              >
+                Duzenle
+              </Button>
             ) : (
               <>
-                <Tooltip title="Sunucu kaydetmesi için servis eklenecek">
-                  <Button size="small" type="primary" onClick={() => { message.info("Kaydet servisi eklenecek (placeholder)"); setSelectedKey(null); }}>Kaydet</Button>
+                <Tooltip title="Sunucu kaydi icin servis eklenecek">
+                  <Button
+                    size="small"
+                    type="primary"
+                    onClick={() => {
+                      message.info("Kaydet servisi eklenecek (placeholder)");
+                      setSelectedKey(null);
+                    }}
+                  >
+                    Kaydet
+                  </Button>
                 </Tooltip>
-                <Button size="small" onClick={() => setSelectedKey(null)}>İptal</Button>
+                <Button size="small" onClick={() => setSelectedKey(null)}>
+                  Iptal
+                </Button>
               </>
             )}
           </Space>
@@ -142,76 +222,72 @@ export default function DosyaOzetPage() {
     };
     cols.push(actionsCol);
     return cols;
-  }, [detailRows, selectedKey, editBuffer]);
+  }, [detailRows, headerWithFilter, selectedKey, editBuffer]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="text-xs text-slate-500">Firma</div>
-          <div className="font-semibold text-lg">{summary.firma || '-'}</div>
-          <div className="text-xs text-slate-400 mt-1">Master ID: {String(masterId)}</div>
+    <div className="space-y-4">
+      <Card
+        size="small"
+        loading={loading}
+        bodyStyle={{ display: "grid", gap: 8 }}
+        className="detail-summary-card"
+      >
+        <div className="detail-summary-header">
+          <span className="detail-firma">{summary.firma || "-"}</span>
+          <Space size={8} wrap>
+            <span className="detail-meta">Master ID: {String(masterId)}</span>
+            {displayRef ? <span className="detail-meta">Referans: {displayRef}</span> : null}
+          </Space>
         </div>
-        <Space wrap>
-          <Link href={`/tareks/dosya/${encodeURIComponent(String(masterId))}/kalemler/fill${ref ? `?ref=${encodeURIComponent(ref)}` : ""}`}>
-            <Button>Kalemlerle Doldur (Web)</Button>
-          </Link>
-          <Link href={`/tareks/para-istem?masterId=${encodeURIComponent(String(masterId))}`}>
-            <Button>Para İsteme</Button>
-          </Link>
-        </Space>
-      </div>
-
-      <Card title="Dosya Özeti" loading={loading}>
         {error ? (
-          <div className="text-red-600">{error}</div>
+          <div className="text-danger">{error}</div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+          <div className="detail-summary-grid">
             <div>
-              <div className="text-slate-500">Firma</div>
-              <div className="font-medium">{summary.firma}</div>
+              <span className="summary-label">Durum</span>
+              <Tag color="blue">{summary.durum}</Tag>
             </div>
             <div>
-              <div className="text-slate-500">Durum</div>
-              <div>
-                <Tag color="blue">{summary.durum}</Tag>
-              </div>
+              <span className="summary-label">Sube</span>
+              <span className="summary-value">{summary.sube}</span>
             </div>
             <div>
-              <div className="text-slate-500">Şube</div>
-              <div className="font-medium">{summary.sube}</div>
+              <span className="summary-label">Belge Tur</span>
+              <span className="summary-value">{summary.belge}</span>
             </div>
             <div>
-              <div className="text-slate-500">Belge Tür</div>
-              <div className="font-medium">{summary.belge}</div>
-            </div>
-            <div>
-              <div className="text-slate-500">Yıl</div>
-              <div className="font-medium">{summary.yil}</div>
-            </div>
-            <div>
-              <div className="text-slate-500">Referans</div>
-              <div className="font-medium">{ref || "-"}</div>
+              <span className="summary-label">Yil</span>
+              <span className="summary-value">{summary.yil}</span>
             </div>
           </div>
         )}
+        <Space size={8} wrap>
+          <Link
+            href={`/tareks/dosya/${encodeURIComponent(String(masterId))}/kalemler/fill${
+              ref ? `?ref=${encodeURIComponent(ref)}` : ""
+            }`}
+          >
+            <Button size="small" type="primary">
+              Kalemleri doldur
+            </Button>
+          </Link>
+        </Space>
       </Card>
 
-      <Card title="Tareks Detay">
-        <div className="text-sm text-slate-500 mb-2">Kalemler üzerinde hızlı düzenleme yapabilirsiniz.</div>
-        <div className="bg-white rounded border border-slate-100">
+      <Card size="small" title="Detay">
+        <div className="table-meta">Kalemler uzerinde hizli duzenleme yapabilirsiniz.</div>
+        <div id="tareks-table-container" className="tareks-compact">
           <Table
             size="small"
-            dataSource={detailRows.map((r) => ({ key: getRowKey(r), ...r }))}
+            dataSource={filteredDetailRows.map((r) => ({ key: getRowKey(r), ...r }))}
             columns={detailColumns}
-            scroll={{ x: "max-content", y: 520 }}
-            pagination={{ pageSize: 50, showSizeChanger: true }}
+            scroll={{ x: "max-content" }}
+            pagination={false}
             onRow={(record) => ({ onClick: () => setSelectedKey(record.key as string) })}
-            rowClassName={(rec) => (rec.key === selectedKey ? "bg-sky-100" : "")}
+            rowClassName={(record) => (record.key === selectedKey ? "tareks-row-selected" : "")}
           />
         </div>
       </Card>
     </div>
   );
 }
-

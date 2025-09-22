@@ -3,6 +3,9 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --font-family-base: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  --font-size-base: 11px;
+  --font-weight-regular: 400;
 }
 
 /* @theme inline removed: this at-rule is not supported by the project's CSS linter/tooling */
@@ -15,14 +18,30 @@
 }
 
 body {
+  margin: 0;
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-regular);
 }
 
 /* Allow horizontal scrolling; table containers will control overflow */
 body, html {
   overflow-x: auto;
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-regular);
+}
+
+body * {
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+strong, b {
+  font-weight: var(--font-weight-regular);
 }
 
 /* ensure table headers are painted white */
@@ -167,94 +186,122 @@ main, main > section, #__next > main {
 
 /* Modern, minimal sidebar styles used by Tareks page */
 .tareks-sider {
-  font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background: rgb(33,79,115) !important;
-  color: #ffffff !important;
+  background: #f1f5f9 !important;
+  border-right: 1px solid #e2e8f0;
 }
-.tareks-sider .sider-brand {
-  font-weight: 700;
-  letter-spacing: 0.6px;
-  font-size: 14px;
-}
-.tareks-sider .sider-logo {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+.tareks-sider-logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: #dbeafe;
+  color: #1d4ed8;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-weight: 700;
-  color: #fff;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.04);
-  box-shadow: 0 1px 0 rgba(0,0,0,0.05) inset;
 }
-.tareks-sider .section-title {
-  font-size: 13px;
-  color: rgba(255,255,255,0.95);
-  font-weight: 600;
-  text-transform: none;
-  letter-spacing: 0.4px;
-  margin-left: 6px;
+.tareks-sider-title {
+  font-size: 11px;
+  font-weight: 400;
+  color: #0f172a;
 }
-.tareks-sider .menu-item {
-  text-align: left;
-  padding: 0 10px 0 22px; /* leave space for active indicator */
+.tareks-sider-sub {
+  font-size: 11px;
+  color: #64748b;
+}
+.tareks-menu-link {
+  display: block;
+  padding: 6px 10px;
+  border-radius: 6px;
+  color: #0f172a;
+  text-decoration: none;
+  transition: background 140ms ease;
+}
+.tareks-menu-link:hover,
+.tareks-menu-link:focus-visible {
+  background: #e2e8f0;
+}
+.tareks-menu-link[aria-current='page'] {
+  background: #dbeafe;
+  color: #0f172a;
+}
+.tareks-section-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 11px;
+  color: #64748b;
+}
+.tareks-sidebar-aux {
+  flex: 1;
+  overflow: auto;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
   border-radius: 8px;
-  background: transparent;
-  color: rgba(255,255,255,0.95);
-  border: none;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
+  padding: 8px;
+}
+.tareks-header-title {
+  font-size: 11px;
+  font-weight: 400;
+  color: #0f172a;
+}
+/* Tareks list page layout helpers */
+.filter-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(160px, 220px) auto;
+  gap: 12px;
+  align-items: end;
+}
+.filter-field {
+  display: grid;
+  gap: 4px;
+}
+.filter-field label {
+  color: #475569;
+}
+.filter-actions {
+  display: flex;
+  align-items: flex-end;
+}
+.text-danger {
+  color: #ef4444;
+}
+.table-meta {
+  padding: 8px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: space-between;
+}
+/* Detail summary layout */
+.detail-summary-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+.detail-summary-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  transition: background 140ms ease, color 140ms ease;
-  width: 100%;
-  box-sizing: border-box;
-  height: 40px; /* fixed tab height */
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  justify-content: space-between;
+  gap: 12px;
 }
-.tareks-sider .menu-item .menu-icon {
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
-  background: transparent;
-  border: 2px solid rgba(255,255,255,0.14);
-  display: inline-block;
+.detail-firma {
+  font-size: 11px;
+  font-weight: 600;
+  color: #0f172a;
 }
-.tareks-sider .menu-item:hover { background: rgba(255,255,255,0.03); }
-/* active state uses translucent light background and a slim blue indicator */
-.tareks-sider .menu-item.active {
-  background: rgba(255,255,255,0.06);
-  color: #fff;
-  position: relative;
+.detail-meta {
+  color: #64748b;
 }
-.tareks-sider .menu-item.active::before {
-  content: '';
-  position: absolute;
-  left: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 3px;
-  height: 18px;
-  border-radius: 2px;
-  background: #ffffff;
+.detail-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
 }
-.tareks-sider .menu-item.active .menu-icon { border-color: rgba(255,255,255,0.9); background: rgba(255,255,255,0.14); }
-
-/* collapsed state: keep width but hide text labels for compact view */
-.tareks-sider.collapsed .sider-brand,
-.tareks-sider.collapsed .section-title,
-.tareks-sider.collapsed .menu-item > span.label {
-  display: none;
+.summary-label {
+  display: block;
+  color: #64748b;
 }
-.tareks-sider.collapsed .menu-item { justify-content: center; }
-
-
-
+.summary-value {
+  display: block;
+  color: #0f172a;
+}

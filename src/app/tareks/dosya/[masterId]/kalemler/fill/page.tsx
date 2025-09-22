@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import { Button, Space, Table, message } from "antd";
+import { Button, Input, Space, Table, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import ReactDOM from "react-dom";
 
@@ -18,6 +18,46 @@ export default function KalemlerFillPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
+
+  const applyFilter = useCallback((field: string, value: string) => {
+    setColumnFilters((prev) => {
+      const next = { ...prev };
+      if (value.trim().length === 0) {
+        delete next[field];
+      } else {
+        next[field] = value;
+      }
+      return next;
+    });
+  }, []);
+
+  const filteredRows = useMemo(() => {
+    const active = Object.entries(columnFilters).filter(([, value]) => value.trim().length > 0);
+    if (!active.length) return rows;
+    return rows.filter((row) =>
+      active.every(([key, value]) => {
+        const source = row[key];
+        if (source === undefined || source === null) return false;
+        return String(source).toLowerCase().includes(value.trim().toLowerCase());
+      })
+    );
+  }, [rows, columnFilters]);
+
+  const headerWithFilter = useCallback(
+    (label: string) => (
+      <div className="col-header">
+        <span>{label}</span>
+        <Input
+          size="small"
+          allowClear
+          value={columnFilters[label] ?? ""}
+          onChange={(e) => applyFilter(label, e.target.value)}
+        />
+      </div>
+    ),
+    [columnFilters, applyFilter]
+  );
 
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [iframeHeight, setIframeHeight] = useState<string>('auto');
@@ -71,15 +111,15 @@ export default function KalemlerFillPage() {
       setError(null);
       setLoading(true);
       try {
-        const res = await fetch(`/api/tareksdetay?id=${encodeURIComponent(String(masterId))}`);
+        const res = await fetch(`/api/tareks/detay?id=${encodeURIComponent(String(masterId))}`);
         const data = await res.json();
         if (!active) return;
         if (res.ok) setRows((data.rows as Row[]) || []);
-        else setError(data.error || "Detay alınamadı");
+        else setError(data.error || "Detay alinamadi");
       } catch (e) {
         if (!active) return;
         const msg = e instanceof Error ? e.message : String(e);
-        setError("Sunucu hatası: " + msg);
+        setError("Sunucu hatasi: " + msg);
       } finally {
         if (active) setLoading(false);
       }
@@ -91,8 +131,13 @@ export default function KalemlerFillPage() {
 
   const cols = useMemo<ColumnsType<Row>>(() => {
     const hidden = new Set(["tareksmasterid", "beyannameid", "musteriid"]);
-    const first = rows[0] || {};
-    const keys = Object.keys(first).filter((k) => !hidden.has(k)).slice(0, 10);
+    const keySet = new Set<string>();
+    for (const r of rows) {
+      Object.keys(r).forEach((k) => {
+        if (!hidden.has(k)) keySet.add(k);
+      });
+    }
+    const keys = Array.from(keySet).slice(0, 10);
     const fillCol = {
       title: '',
       key: 'doldur',
@@ -113,9 +158,14 @@ export default function KalemlerFillPage() {
         );
       },
     };
-    const dataCols = keys.map((k) => ({ title: k, dataIndex: k, key: k, width: 160 }));
+    const dataCols = keys.map((k) => ({
+      title: headerWithFilter(k),
+      dataIndex: k,
+      key: k,
+      width: 160,
+    }));
     return [fillCol, ...dataCols] as ColumnsType<Row>;
-  }, [rows]);
+  }, [rows, headerWithFilter]);
 
   function getKey(r: Row) {
     return String(
@@ -133,7 +183,7 @@ export default function KalemlerFillPage() {
       gtip: row["gtip"] ?? "",
       miktar: row["miktar"] ?? (row["Miktar"] as unknown) ?? "",
       birim: row["birim"] ?? (row["Birim"] as unknown) ?? "",
-      mense: row["mense"] ?? row["Menşe"] ?? row["menseulke"] ?? "",
+      mense: row["mense"] ?? row["Mense"] ?? row["menseulke"] ?? "",
       aciklama: row["aciklama"] ?? row["malaciklama"] ?? "",
       referans: row["referansno"] ?? refId ?? "",
     } as Record<string, unknown>;
@@ -141,11 +191,11 @@ export default function KalemlerFillPage() {
 
   function tryFillInIframe(values?: Record<string, unknown>) {
     if (mode !== 'proxy') {
-      message.warning('Doldurma sadece Proxy modunda mümkündür');
+      message.warning('Doldurma sadece proxy modunda mumkundur');
       return;
     }
     const iframe = iframeRef.current;
-    if (!iframe || !iframe.contentWindow) return message.warning("Sayfa yüklenmedi");
+    if (!iframe || !iframe.contentWindow) return message.warning("Sayfa yuklenmedi");
     try {
       const doc = iframe.contentWindow.document;
       const vals = values || (selectedRow ? mapToForm(selectedRow) : {});
@@ -164,14 +214,14 @@ export default function KalemlerFillPage() {
       setVal('input[name="birim"]', vo.birim);
       setVal('input[name="mense"]', vo.mense);
       setVal('textarea[name="aciklama"]', vo.aciklama);
-      message.success("Form değerleri iframe içine aktarıldı (deneysel)");
+      message.success("Form degerleri iframe icine aktarildi (deneysel)");
     } catch (e) {
-      message.error("Iframe içine yazılamadı: " + (e as Error).message);
+      message.error("Iframe icine yazilamadi: " + (e as Error).message);
     }
   }
 
   function tryFillInIframeFromRow(row: Row | null) {
-    if (!row) return message.warning("Lütfen bir kalem seçin");
+    if (!row) return message.warning("Lutfen bir kalem secin");
     tryFillInIframe(mapToForm(row));
   }
 
@@ -181,7 +231,7 @@ export default function KalemlerFillPage() {
       <div className="flex items-center justify-between p-2">
         <div className="text-sm text-slate-600">Kalemler</div>
         <div className="flex items-center gap-8">
-          <div className="text-xs text-slate-400">Çift tıkla → satırı seç</div>
+          <div className="text-xs text-slate-400">Cift tikla satiri sec</div>
         </div>
       </div>
       {error && <div className="text-red-600 text-sm px-2">{error}</div>}
@@ -190,13 +240,13 @@ export default function KalemlerFillPage() {
           size="small"
           loading={loading}
           columns={cols}
-          dataSource={rows.map((r) => ({ key: getKey(r), ...r }))}
+          dataSource={filteredRows.map((r) => ({ key: getKey(r), ...r }))}
           pagination={false}
           scroll={{ x: "max-content", y: Math.max(32, tableHeight - 32) }}
           onRow={(record) => ({
             onClick: () => setSelectedKey(record.key as string),
           })}
-          rowClassName={(rec) => (rec.key === selectedKey ? "bg-sky-100" : "")}
+          rowClassName={(rec) => (rec.key === selectedKey ? "tareks-row-selected" : "")}
         />
       </div>
       <div
@@ -219,7 +269,7 @@ export default function KalemlerFillPage() {
           window.addEventListener('mouseup', onUp);
         }}
         style={{ cursor: 'ns-resize', height: 6, marginTop: 4, background: '#e5e7eb', borderRadius: 3 }}
-        title="Yüksekliği sürükleyerek ayarlayın"
+        title="Yuksekligi surukleyerek ayarlayin"
       />
     </div>
   );
@@ -244,12 +294,12 @@ export default function KalemlerFillPage() {
       {/* render kalemler into sidebar if possible */}
       {sidebarTarget ? ReactDOM.createPortal(kalemPanel, sidebarTarget) : kalemPanel}
 
-      {/* Right column: Web Sayfası (main content) */}
+      {/* Right column: Web Sayfasi (main content) */}
       <div className="bg-white rounded border border-slate-200 p-3" style={{ marginLeft: 0 }}>
         <div className="flex items-center justify-between mb-2">
-          <div className="font-medium">Web Sayfası</div>
+          <div className="text-slate-700">Web Sayfasi</div>
           <Button onClick={() => window.open("/api/proxy?url=" + encodeURIComponent("https://eortak.dtm.gov.tr/eortak/login/selectApplication.htm"), "_blank")}>
-            Yeni Pencerede Aç
+            Yeni pencerede ac
           </Button>
         </div>
         <div className="rounded overflow-hidden border" style={{ width: iframeWidth }}>
@@ -260,7 +310,7 @@ export default function KalemlerFillPage() {
             style={{ width: '100%', height: iframeHeight, border: 0, display: 'block' }}
           />
         </div>
-        <div className="text-xs text-slate-500 mt-2">Not: Proksi ile yüklenen sayfaya basit alan doldurma yapılır. Gelişmiş doldurma için alan seçicileri hedef sayfaya göre güncellenmelidir.</div>
+        <div className="text-xs text-slate-500 mt-2">Not: Proxy ile yuklenen sayfaya basit alan doldurma yapilir. Gelismis doldurma icin alan secicilerini hedef sayfaya gore guncelleyin.</div>
       </div>
     </div>
   );
