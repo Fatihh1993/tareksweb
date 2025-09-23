@@ -47,7 +47,7 @@ export default function TareksLayout({ children }: { children: ReactNode }) {
           }}
         >
           <Text className="tareks-header-title">Tareks</Text>
-          <Text type="secondary">Yenilenen arayuz</Text>
+          <Text type="secondary"></Text>
         </Header>
         <Content style={{ padding: 24, background: "#f8fafc" }}>
           <div style={{ maxWidth: 1200, margin: "0 auto", width: "100%" }}>{children}</div>

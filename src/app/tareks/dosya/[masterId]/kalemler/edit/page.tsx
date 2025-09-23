@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams, useSearchParams } from "next/navigation"; // <-- eklendi
+import { useParams, useSearchParams, useRouter } from "next/navigation"; // + useRouter
 import { Button, Card, Input, Space, Table, Tag, Modal, Form, DatePicker, message } from "antd";
 import type { ColumnsType, ColumnType } from "antd/es/table";
 import dayjs, { Dayjs } from "dayjs";
@@ -30,7 +30,15 @@ const HIDE_KEYS = new Set([
 export default function KalemlerEditPage() {
   const params = useParams<{ masterId: string }>();
   const masterId = params?.masterId as string;
-  const searchParams = useSearchParams(); // <-- eklendi
+  const searchParams = useSearchParams();
+  const router = useRouter(); // <-- eklendi
+
+  // ref parametresi ve açılacak fill sayfası URL’i
+  const refId = searchParams.get("ref") || "";
+  const fillUrl = useMemo(() => {
+    const qs = refId ? `?ref=${encodeURIComponent(refId)}` : "";
+    return `/tareks/dosya/${encodeURIComponent(masterId)}/kalemler/fill${qs}`;
+  }, [masterId, refId]);
 
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(false);
@@ -393,20 +401,25 @@ export default function KalemlerEditPage() {
   }
 
   function handleFillLines() {
-    // TODO: gerçek aksiyon (örn. fill sayfasına gitme) ekleyin
-    message.info("Kalem doldurma başlatıldı");
+    // fill sayfasını aynı sekmede aç
+    router.push(fillUrl);
   }
 
   return (
     <div className="space-y-4">
       {/* üst butonlar: sola hizalı */}
       <div className="flex flex-wrap items-center gap-2">
+        {/* Geri butonu */}
+        <Button size="small" icon={emojiIcon("⬅️")} onClick={() => router.back()}>
+          Geri
+        </Button>
+
         <Button
           type="primary"
           ghost
           size="small"
           icon={emojiIcon("📝")}
-          onClick={handleFillLines}
+          onClick={handleFillLines}   // href kaldırıldı, aynı sekme
         >
           Kalemleri doldur
         </Button>
