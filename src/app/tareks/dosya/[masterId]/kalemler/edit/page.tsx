@@ -88,6 +88,50 @@ export default function KalemlerEditPage() {
     [columnFilters, applyFilter]
   );
 
+  // Sadece başlık (filtre yok) — yükseklik aynı olsun diye 24px spacer
+  const headerOnly = useCallback(
+    (label: string) => (
+      <div className="col-header">
+        <div className="text-xs text-slate-500 mb-1">{label}</div>
+        <div style={{ height: 24 }} />
+      </div>
+    ),
+    []
+  );
+
+  // Tarih yardımcıları
+  function isDateKey(key: string) {
+    return /tarih|date/i.test(key);
+  }
+  function parseDate(val: unknown): Date | null {
+    if (val instanceof Date && !isNaN(val.getTime())) return val;
+    if (typeof val === "number") {
+      const d = new Date(val);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    if (typeof val === "string") {
+      const s = val.trim();
+      if (!s) return null;
+      // ISO vb.
+      const dIso = new Date(s);
+      if (!isNaN(dIso.getTime())) return dIso;
+      // dd.MM.yyyy | dd/MM/yyyy | dd-MM-yyyy
+      const m = s.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
+      if (m) {
+        const dd = Number(m[1]), mm = Number(m[2]), yyyy = Number(m[3]);
+        const d = new Date(yyyy, mm - 1, dd);
+        return isNaN(d.getTime()) ? null : d;
+      }
+    }
+    return null;
+  }
+  function formatDDMMYYYY(d: Date) {
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const yyyy = d.getFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+  }
+
   const columns = useMemo<ColumnsType<Row>>(() => {
     // discover keys from data and hide ID-like ones
     const keys = Array.from(
@@ -99,16 +143,25 @@ export default function KalemlerEditPage() {
       }, new Set<string>())
     );
 
-    const cols: ColumnsType<Row> = keys.map((k) => ({
-      title: headerWithFilter(k, k),
-      dataIndex: k,
-      key: k,
-      width: 180,
-      render: (v: unknown) => <span>{String(v ?? "")}</span>,
-    }));
+    const cols: ColumnsType<Row> = keys.map((k) => {
+      const dateCol = isDateKey(k);
+      return {
+        title: headerWithFilter(k, k),
+        dataIndex: k,
+        key: k,
+        width: 180,
+        render: (v: unknown) => {
+          const d = parseDate(v);
+          // Tarih kolonuysa daima, değilse yalnızca tarih parse edilebiliyorsa biçimle
+          if (dateCol && d) return <span>{formatDDMMYYYY(d)}</span>;
+          if (!dateCol && d && typeof v === "string") return <span>{formatDDMMYYYY(d)}</span>;
+          return <span>{String(v ?? "")}</span>;
+        },
+      } as ColumnType<Row>;
+    });
 
     const actionsCol: ColumnType<Row> = {
-      title: "İşlemler",
+      title: headerOnly("İşlemler"),
       key: "actions",
       fixed: "right",
       width: 120,
@@ -120,7 +173,7 @@ export default function KalemlerEditPage() {
     };
     cols.push(actionsCol);
     return cols;
-  }, [rows, headerWithFilter]);
+  }, [rows, headerWithFilter, headerOnly]);
 
   // Arama sayfasındaki renkler
   const durumColors: Record<string, string> = {
@@ -283,6 +336,7 @@ export default function KalemlerEditPage() {
 
       <Card size="small" title="Detay" bodyStyle={{ padding: 0 }}>
         <Table
+          className="kalemler-nowrap"              // <— tek satır sınıfı
           size="small"
           loading={loading}
           dataSource={filteredRows.map((r) => ({ key: getRowKey(r), ...r }))}
@@ -293,6 +347,17 @@ export default function KalemlerEditPage() {
       </Card>
 
       {error && <div className="text-red-600 text-sm">{error}</div>}
+
+      {/* Hücreleri tek satır yap */}
+      <style jsx global>{`
+        .kalemler-nowrap .ant-table-cell {
+          white-space: nowrap !important;
+        }
+        /* Başlıkları üstten hizala */
+        .kalemler-nowrap .ant-table-thead .ant-table-cell {
+          vertical-align: top;
+        }
+      `}</style>
     </div>
   );
 }
