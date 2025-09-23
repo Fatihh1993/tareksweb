@@ -2,10 +2,21 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation"; // <-- eklendi
-import { Button, Card, Input, Space, Table, Tag } from "antd"; // + Tag
+import { Button, Card, Input, Space, Table, Tag, Modal, Form, DatePicker, message } from "antd";
 import type { ColumnsType, ColumnType } from "antd/es/table";
+import dayjs, { Dayjs } from "dayjs";
+// import { FormOutlined, FileZipOutlined, CodeOutlined, FileExcelOutlined } from "@ant-design/icons"; // <-- kaldırıldı
+
+// Küçük yardımcı: emoji'yi icon prop'unda kullan
+const emojiIcon = (e: string) => (
+  <span role="img" aria-hidden="true" style={{ fontSize: 16, lineHeight: 1 }}>
+    {e}
+  </span>
+);
 
 type Row = Record<string, unknown>;
+type RowPatch = Partial<Row>;
+type FormValues = Record<string, string | number | Dayjs | null>; // <-- eklendi
 
 const HIDE_KEYS = new Set([
   "tareksmasterid",
@@ -152,7 +163,6 @@ export default function KalemlerEditPage() {
         width: 180,
         render: (v: unknown) => {
           const d = parseDate(v);
-          // Tarih kolonuysa daima, değilse yalnızca tarih parse edilebiliyorsa biçimle
           if (dateCol && d) return <span>{formatDDMMYYYY(d)}</span>;
           if (!dateCol && d && typeof v === "string") return <span>{formatDDMMYYYY(d)}</span>;
           return <span>{String(v ?? "")}</span>;
@@ -165,9 +175,9 @@ export default function KalemlerEditPage() {
       key: "actions",
       fixed: "right",
       width: 120,
-      render: () => (
+      render: (_: unknown, record: Row) => (
         <Space>
-          <Button size="small">Düzenle</Button>
+          <Button size="small" onClick={() => onEdit(record)}>Düzenle</Button>
         </Space>
       ),
     };
@@ -311,11 +321,105 @@ export default function KalemlerEditPage() {
     </div>
   );
 
+  // Edit modal state
+  const [editOpen, setEditOpen] = useState(false);
+  const [editKey, setEditKey] = useState<string | null>(null);
+  const [form] = Form.useForm<FormValues>(); // <-- RowPatch yerine FormValues
+
+  // Görünen kolon anahtarları (formu da aynı sırayla kurmak için)
+  const visibleKeys = useMemo(() => {
+    return Array.from(
+      rows.reduce<Set<string>>((set, r) => {
+        Object.keys(r).forEach((k) => {
+          if (!HIDE_KEYS.has(k)) set.add(k);
+        });
+        return set;
+      }, new Set<string>())
+    );
+  }, [rows]);
+
+  function renderEditorForKey(key: string) {
+    if (isDateKey(key)) {
+      return <DatePicker format="DD/MM/YYYY" style={{ width: "100%" }} />;
+    }
+    return <Input />;
+  }
+
+  function onEdit(row: Row) {
+    const key = getRowKey(row);
+    setEditKey(key);
+    const init: Partial<FormValues> = {}; // <-- FormValues
+    Object.entries(row as Record<string, unknown>).forEach(([k, v]) => {
+      if (HIDE_KEYS.has(k)) return;
+      if (isDateKey(k)) {
+        const d = parseDate(v);
+        init[k] = d ? dayjs(d) : null;
+      } else {
+        init[k] = (v as string | number | null) ?? null;
+      }
+    });
+    form.setFieldsValue(init); // <-- artık hata yok
+    setEditOpen(true);
+  }
+
+  async function handleSave() {
+    try {
+      const values = await form.validateFields(); // FormValues
+      const payload: RowPatch = {};
+      for (const [k, v] of Object.entries(values as FormValues)) {
+        if (isDateKey(k)) {
+          payload[k] = v ? (v as Dayjs).format("DD/MM/YYYY") : null;
+        } else {
+          payload[k] = v as unknown;
+        }
+      }
+      setRows((prev) => prev.map((r) => (getRowKey(r) === editKey ? { ...r, ...payload } : r)));
+      message.success("Kaydedildi");
+      setEditOpen(false);
+    } catch { /* no-op */ }
+  }
+
+  // İndirme butonları için örnek handler
+  async function handleDownload(kind: "zip" | "xml" | "xlsx") {
+    try {
+      message.loading({ content: "İndiriliyor...", key: "dl" });
+      // TODO: gerçek endpoint ile değiştirin
+      const url = `/api/tareks/exports?masterId=${encodeURIComponent(masterId)}&format=${kind}`;
+      // const res = await fetch(url); const blob = await res.blob(); saveAs(blob, `dosya.${kind}`);
+      message.success({ content: "İndirme hazır (örnek).", key: "dl" });
+    } catch {
+      message.error({ content: "İndirme başarısız." });
+    }
+  }
+
+  function handleFillLines() {
+    // TODO: gerçek aksiyon (örn. fill sayfasına gitme) ekleyin
+    message.info("Kalem doldurma başlatıldı");
+  }
+
   return (
     <div className="space-y-4">
-      {/* üst sağ buton */}
-      <div className="flex justify-end">
-        <Button type="primary">Kalemleri doldur</Button>
+      {/* üst butonlar: sola hizalı */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="primary"
+          ghost
+          size="small"
+          icon={emojiIcon("📝")}
+          onClick={handleFillLines}
+        >
+          Kalemleri doldur
+        </Button>
+
+        <Button size="small" icon={emojiIcon("📦")} onClick={() => handleDownload("zip")}>
+          Arşiv indir
+        </Button>
+        <Button size="small" icon={emojiIcon("🧾")} onClick={() => handleDownload("xml")}>
+          XML indir
+        </Button>
+        <Button size="small" icon={emojiIcon("📊")} onClick={() => handleDownload("xlsx")}>
+          Excel indir
+        </Button>
       </div>
 
       {/* Üst bilgi: tek satır */}
@@ -336,7 +440,7 @@ export default function KalemlerEditPage() {
 
       <Card size="small" title="Detay" bodyStyle={{ padding: 0 }}>
         <Table
-          className="kalemler-nowrap"              // <— tek satır sınıfı
+          className="kalemler-nowrap"
           size="small"
           loading={loading}
           dataSource={filteredRows.map((r) => ({ key: getRowKey(r), ...r }))}
@@ -345,6 +449,28 @@ export default function KalemlerEditPage() {
           pagination={{ pageSize: 50 }}
         />
       </Card>
+
+      {/* Edit Modal */}
+      <Modal
+        open={editOpen}
+        title="Kalem Düzenle"
+        onCancel={() => setEditOpen(false)}
+        onOk={handleSave}
+        okText="Kaydet"
+        cancelText="İptal"
+        width={900}
+        destroyOnClose
+      >
+        <Form form={form} layout="vertical">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {visibleKeys.map((k) => (
+              <Form.Item key={k} name={k} label={k}>
+                {renderEditorForKey(k)}
+              </Form.Item>
+            ))}
+          </div>
+        </Form>
+      </Modal>
 
       {error && <div className="text-red-600 text-sm">{error}</div>}
 
