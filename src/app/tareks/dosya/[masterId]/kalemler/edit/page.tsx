@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation"; // + useRouter
-import { Button, Card, Input, Space, Table, Tag, Modal, Form, DatePicker, message } from "antd";
+import { Button, Card, Input, Space, Table, Tag, Modal, Form, DatePicker, message, Select, Popconfirm } from "antd";
 import type { ColumnsType, ColumnType } from "antd/es/table";
 import dayjs, { Dayjs } from "dayjs";
 // import { FormOutlined, FileZipOutlined, CodeOutlined, FileExcelOutlined } from "@ant-design/icons"; // <-- kaldırıldı
@@ -26,6 +26,31 @@ const HIDE_KEYS = new Set([
   "beyannameid",
   "musteriid",
 ]);
+
+interface MoneyItem {
+  tareksparaistemeid: string;
+  tareksmasterid: string;
+  tutar: number | null;
+  dovizkod: string | null;
+  tip: number | null;
+  kdvoran: number | null;
+  tahakkukno: string | null;
+  insuser: string | null;
+  instime: string | null;
+  upduser?: string | null;
+  updtime?: string | null;
+  tediyeistemeid?: string | null;
+}
+
+interface MoneyFormValues {
+  tutar: number;
+  dovizkod: string;
+  tip?: number | null;
+  kdvoran?: number | null;
+  tahakkukno?: string | null;
+}
+
+type MasrafTur = { tip: number; kdvoran: number; adi: string }; // <-- eklendi
 
 export default function KalemlerEditPage() {
   const params = useParams<{ masterId: string }>();
@@ -93,7 +118,7 @@ export default function KalemlerEditPage() {
   }, [rows, columnFilters]);
 
   const headerWithFilter = useCallback(
-    (label: string, key: string) => (
+    (label: string, key: string, placeholder?: string) => (
       <div className="col-header">
         <div className="text-xs text-slate-500 mb-1">{label}</div>
         <Input
@@ -101,6 +126,7 @@ export default function KalemlerEditPage() {
           allowClear
           value={columnFilters[key] ?? ""}
           onChange={(e) => applyFilter(key, e.target.value)}
+          placeholder={placeholder || "Filtrele"}
         />
       </div>
     ),
@@ -110,9 +136,9 @@ export default function KalemlerEditPage() {
   // Sadece başlık (filtre yok) — yükseklik aynı olsun diye 24px spacer
   const headerOnly = useCallback(
     (label: string) => (
-      <div className="col-header">
+      <div className="col-header col-header--nofilter">
         <div className="text-xs text-slate-500 mb-1">{label}</div>
-        <div style={{ height: 24 }} />
+        <div className="col-header-spacer" />
       </div>
     ),
     []
@@ -152,7 +178,6 @@ export default function KalemlerEditPage() {
   }
 
   const columns = useMemo<ColumnsType<Row>>(() => {
-    // discover keys from data and hide ID-like ones
     const keys = Array.from(
       rows.reduce<Set<string>>((set, r) => {
         Object.keys(r).forEach((k) => {
@@ -168,28 +193,27 @@ export default function KalemlerEditPage() {
         title: headerWithFilter(k, k),
         dataIndex: k,
         key: k,
-        width: 180,
+        // width: 160,  // <-- kaldırıldı; satırı kırıyordu
         render: (v: unknown) => {
           const d = parseDate(v);
           if (dateCol && d) return <span>{formatDDMMYYYY(d)}</span>;
           if (!dateCol && d && typeof v === "string") return <span>{formatDDMMYYYY(d)}</span>;
           return <span>{String(v ?? "")}</span>;
         },
-      } as ColumnType<Row>;
+      };
     });
 
-    const actionsCol: ColumnType<Row> = {
+    cols.push({
       title: headerOnly("İşlemler"),
       key: "actions",
       fixed: "right",
-      width: 120,
+      width: 150,
       render: (_: unknown, record: Row) => (
-        <Space>
-          <Button size="small" onClick={() => onEdit(record)}>Düzenle</Button>
-        </Space>
+        <Button size="small" onClick={() => onEdit(record)}>
+          Düzenle
+        </Button>
       ),
-    };
-    cols.push(actionsCol);
+    });
     return cols;
   }, [rows, headerWithFilter, headerOnly]);
 
@@ -315,15 +339,15 @@ export default function KalemlerEditPage() {
     );
   }
 
-  // küçük bilgi öğesi (value artık ReactNode)
+  // küçük bilgi öğesi (value artık ReactNode) – min-width küçültüld
   const InfoItem = ({
     label,
     value,
     strong = false,
   }: { label: string; value: React.ReactNode; strong?: boolean }) => (
-    <div className="inline-flex flex-col gap-1 shrink-0 min-w-[200px]">
-      <div className="text-xs text-slate-500">{label}</div>
-      <div className="text-slate-800" style={strong ? { fontWeight: 700 } : undefined}>
+    <div className="info-item">
+      <div className="info-item-label">{label}</div>
+      <div className="info-item-value" style={strong ? { fontWeight: 600 } : undefined}>
         {value}
       </div>
     </div>
@@ -405,6 +429,162 @@ export default function KalemlerEditPage() {
     router.push(fillUrl);
   }
 
+  // Yeni para iste handler
+  const [moneyModalOpen, setMoneyModalOpen] = useState(false);
+  const [moneyForm] = Form.useForm<MoneyFormValues>();
+  const [moneyList, setMoneyList] = useState<MoneyItem[]>([]);
+  const [moneyLoading, setMoneyLoading] = useState(false);
+  const [moneySaving, setMoneySaving] = useState(false);
+  const [moneyDeletingId, setMoneyDeletingId] = useState<string | null>(null);
+
+  // Masraf tür listesi (Tip + KDV)  <-- eklendi
+  const [masrafTur, setMasrafTur] = useState<MasrafTur[]>([]);
+  const [masrafLoading, setMasrafLoading] = useState(false);
+
+  function handleRequestMoney() {
+    setMoneyModalOpen(true);
+    if (moneyList.length === 0) void loadMoneyList();
+    if (masrafTur.length === 0) void loadMasrafTur(); // <-- eklendi
+  }
+
+  async function loadMasrafTur() { // <-- eklendi
+    setMasrafLoading(true);
+    try {
+      const res = await fetch('/api/para-isteme/masraf-tur', { cache: 'no-store' });
+      const data: { success?: boolean; data?: { kdvoran: number; tarekskayittip: number; adi: string }[]; error?: string } =
+        await res.json();
+      if (!res.ok || !data.success || !data.data) {
+        throw new Error(data.error || 'Masraf türleri alınamadı');
+      }
+      const mapped: MasrafTur[] = data.data.map(r => ({
+        tip: r.tarekskayittip,
+        kdvoran: Number(r.kdvoran),
+        adi: r.adi
+      }));
+      setMasrafTur(mapped);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      message.error(msg);
+    } finally {
+      setMasrafLoading(false);
+    }
+  }
+
+  async function loadMoneyList() {
+    if (!masterId) return;
+    setMoneyLoading(true);
+    try {
+      const res = await fetch(`/api/para-isteme?masterId=${masterId}`);
+      const data: { success?: boolean; data?: MoneyItem[]; error?: string } = await res.json();
+      if (!res.ok || !data.success || !data.data) {
+        throw new Error(data.error || 'Para isteme listesi alınamadı');
+      }
+      // Tarihi string’e çevir
+      const mapped = data.data.map(d => ({
+        ...d,
+        instime: d.instime ? new Date(d.instime).toLocaleString('tr-TR') : null,
+        updtime: d.updtime ? new Date(d.updtime).toLocaleString('tr-TR') : null
+      }));
+      setMoneyList(mapped);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      message.error(msg);
+    } finally {
+      setMoneyLoading(false);
+    }
+  }
+
+  async function submitMoneyForm() {
+    try {
+      const values = await moneyForm.validateFields();
+      setMoneySaving(true);
+      const insuser =
+        localStorage.getItem('insuser') ||
+        (() => {
+          try {
+            const u = JSON.parse(sessionStorage.getItem('user') || '{}');
+            return u?.username || 'web';
+          } catch { return 'web'; }
+        })();
+
+      const res = await fetch('/api/para-isteme', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tareksmasterid: masterId,
+          tutar: Number(values.tutar),
+          dovizkod: values.dovizkod,
+          tip: values.tip ?? null,
+          kdvoran: values.kdvoran ?? null,
+          tahakkukno: values.tahakkukno || null,
+          insuser
+        })
+      });
+      const data: { success?: boolean; id?: string; error?: string } = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Kayıt başarısız');
+      message.success('Para isteme kaydedildi');
+      moneyForm.resetFields();
+      await loadMoneyList();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      message.error(msg);
+    } finally {
+      setMoneySaving(false);
+    }
+  }
+
+  async function handleDeleteMoney(id: string) {
+    setMoneyDeletingId(id);
+    try {
+      const res = await fetch(`/api/para-isteme/${id}`, { method: 'DELETE' });
+      const data: { success?: boolean; error?: string } = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Silme başarısız');
+      message.success('Silindi');
+      setMoneyList(prev => prev.filter(m => m.tareksparaistemeid !== id));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      message.error(msg);
+    } finally {
+      setMoneyDeletingId(null);
+    }
+  }
+
+  // Para isteme tablo kolonları
+  const moneyColumns: ColumnsType<MoneyItem> = [
+    {
+      title: "Tutar",
+      dataIndex: "tutar",
+      key: "tutar",
+      render: (v: number | null, r) => (v != null ? `${v} ${r.dovizkod || ""}` : "")
+    },
+    { title: "Döviz", dataIndex: "dovizkod", key: "dovizkod" },
+    { title: "Tip", dataIndex: "tip", key: "tip" },
+    { title: "KDV Oran", dataIndex: "kdvoran", key: "kdvoran" },
+    { title: "Tahakkuk No", dataIndex: "tahakkukno", key: "tahakkukno" },
+    { title: "Kayıt Kullanıcı", dataIndex: "insuser", key: "insuser" },
+    { title: "Kayıt Tarihi", dataIndex: "instime", key: "instime" },
+    {
+      title: "İşlem",
+      key: "actions",
+      render: (_value, row) => (
+        <Popconfirm
+          title="Silinsin mi?"
+            okText="Evet"
+            cancelText="Hayır"
+          onConfirm={() => void handleDeleteMoney(row.tareksparaistemeid)}
+        >
+          <Button
+            size="small"
+            danger
+            loading={moneyDeletingId === row.tareksparaistemeid}
+          >
+            Sil
+          </Button>
+        </Popconfirm>
+      )
+    }
+  ];
+
   return (
     <div className="space-y-4">
       {/* üst butonlar: sola hizalı */}
@@ -433,33 +613,41 @@ export default function KalemlerEditPage() {
         <Button size="small" icon={emojiIcon("📊")} onClick={() => handleDownload("xlsx")}>
           Excel indir
         </Button>
+
+        {/* Yeni Para İste butonu */}
+        <Button size="small" type="dashed" icon={emojiIcon("💰")} onClick={handleRequestMoney}>
+          Para İste
+        </Button>
       </div>
 
       {/* Üst bilgi: tek satır */}
-      <Card size="small" bodyStyle={{ padding: 16 }}>
-        <div className="overflow-x-auto">
-          <div className="flex items-start gap-8 whitespace-nowrap">
-            <InfoItem label="Firma" value={companyName} strong />
-            <InfoItem
-              label="Durum"
-              value={<Tag color={durumColors[durumName] ?? "default"}>{durumName}</Tag>}
-            />
+      <Card
+        size="small"
+        bodyStyle={{ padding: 12 }}
+        className="info-card"
+      >
+        <div className="info-strip">
+          <InfoItem label="Firma" value={companyName} strong />
+          <InfoItem
+            label="Durum"
+            value={<Tag color={durumColors[durumName] ?? "default"}>{durumName}</Tag>}
+          />
             <InfoItem label="Şube" value={sube} />
             <InfoItem label="Belge Tür" value={belgeTur} />
             <InfoItem label="Yıl" value={yil} />
-          </div>
         </div>
       </Card>
 
       <Card size="small" title="Detay" bodyStyle={{ padding: 0 }}>
         <Table
-          className="kalemler-nowrap"
+          className="tareks-grid tareks-grid-singleline"
           size="small"
           loading={loading}
           dataSource={filteredRows.map((r) => ({ key: getRowKey(r), ...r }))}
           columns={columns}
-          scroll={{ x: "max-content", y: 520 }}
-          pagination={{ pageSize: 50 }}
+          // scroll.y büyük boşluk oluşturuyorsa dinamik ver; satır adedi azsa kaldır
+          scroll={filteredRows.length > 10 ? { x: "max-content", y: 520 } : { x: "max-content" }}
+          pagination={{ pageSize: 50, showSizeChanger: false }}
         />
       </Card>
 
@@ -485,16 +673,162 @@ export default function KalemlerEditPage() {
         </Form>
       </Modal>
 
+      {/* Para İste Modal */}
+      <Modal
+        title="Para İste"
+        open={moneyModalOpen}
+        onCancel={() => setMoneyModalOpen(false)}
+        onOk={submitMoneyForm}
+        okText="Kaydet"
+        cancelText="Vazgeç"
+        confirmLoading={moneySaving}
+        destroyOnClose={false}
+        width={900}
+      >
+        <div className="money-form-wrapper">
+          <Form
+            form={moneyForm}
+            layout="inline"
+            initialValues={{ dovizkod: "TL" }}
+            className="money-form-inline"
+          >
+            <Form.Item
+              label="Tutar"
+              name="tutar"
+              rules={[{ required: true, message: "Tutar girin" }]}
+            >
+              <Input size="small" type="number" min={0} step="0.01" placeholder="Tutar" />
+            </Form.Item>
+
+            <Form.Item
+              label="Döviz"
+              name="dovizkod"
+              rules={[{ required: true, message: "Döviz seçin" }]}
+            >
+              <Select
+                size="small"
+                style={{ minWidth: 90 }}
+                options={[
+                  { value: "TL", label: "TL" },
+                  { value: "USD", label: "USD" },
+                  { value: "EUR", label: "EUR" },
+                ]}
+              />
+            </Form.Item>
+
+            {/* Tip: dinamik masraf türleri */}
+            <Form.Item label="Tip" name="tip">
+              <Select<number>
+                size="small"
+                placeholder={masrafLoading ? "Yükleniyor..." : "Tip"}
+                loading={masrafLoading}
+                style={{ minWidth: 180 }}
+                showSearch
+                optionFilterProp="label"
+                options={masrafTur.map(m => ({
+                  value: m.tip,
+                  label: m.adi, // sadece isim göster
+                }))}
+                onChange={(val) => {
+                  const found = masrafTur.find(x => x.tip === val);
+                  if (found) moneyForm.setFieldsValue({ kdvoran: found.kdvoran });
+                }}
+              />
+            </Form.Item>
+
+            <Form.Item label="KDV Oran" name="kdvoran">
+              <Input size="small" type="number" step="0.01" placeholder="KDV" />
+            </Form.Item>
+
+            <Form.Item label="Tahakkuk No" name="tahakkukno">
+              <Input size="small" placeholder="Tahakkuk No" />
+            </Form.Item>
+          </Form>
+
+          <Table
+            style={{ marginTop: 12 }}
+            size="small"
+            bordered
+            rowKey="tareksparaistemeid"
+            dataSource={moneyList}
+            columns={moneyColumns}
+            loading={moneyLoading}
+            pagination={{ pageSize: 5, size: "small" }}
+            locale={{
+              emptyText: moneyLoading ? "Yükleniyor..." : "Kayıt yok",
+            }}
+          />
+          <div style={{ marginTop: 8, textAlign: "right" }}>
+            <Button size="small" onClick={() => void loadMoneyList()}>
+              Yenile
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       {error && <div className="text-red-600 text-sm">{error}</div>}
 
-      {/* Hücreleri tek satır yap */}
+      {/* TEK GLOBAL STIL BLOĞU */}
       <style jsx global>{`
-        .kalemler-nowrap .ant-table-cell {
-          white-space: nowrap !important;
+        /* Üst bilgi şeridi (geri yüklendi & tek satır) */
+        .info-card {
+          margin-bottom: 0;
         }
-        /* Başlıkları üstten hizala */
-        .kalemler-nowrap .ant-table-thead .ant-table-cell {
-          vertical-align: top;
+        .info-strip {
+          display: flex;
+          flex-wrap: nowrap;         /* tek satır */
+          gap: 28px;
+          align-items: flex-start;
+          overflow: hidden;          /* taşan uzun firma adlarını kes */
+        }
+        .info-item {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          min-width: 110px;
+        }
+        .info-item-label {
+          font-size: 11px;
+          color: #64748b;
+          line-height: 1;
+          white-space: nowrap;
+        }
+        .info-item-value {
+          font-size: 13px;
+          line-height: 1.15;
+          color: #1e293b;
+          white-space: nowrap;
+          font-weight: 500;
+          max-width: 220px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        /* Tablo başlık + filtre */
+        .col-header {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+        .col-header .ant-input {
+          height: 30px;
+          font-size: 12px;
+        }
+        .col-header-spacer {
+          height: 30px;
+          display: block;
+        }
+        .tareks-grid .ant-table-thead .ant-table-cell {
+          vertical-align: bottom;
+        }
+
+        /* Tek satır body hücreleri */
+        .tareks-grid-singleline .ant-table-tbody > tr > td {
+          white-space: nowrap !important;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          line-height: 1.2;
+          padding: 4px 8px;
         }
       `}</style>
     </div>

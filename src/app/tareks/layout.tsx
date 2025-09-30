@@ -1,56 +1,110 @@
 "use client";
 
-import Link from "next/link";
 import type { ReactNode } from "react";
-import { Layout, Typography } from "antd";
+import { useEffect, useState } from "react";
+import { Layout, Typography, Button, Tooltip } from "antd";
+import { usePathname } from "next/navigation";
+import { MenuFoldOutlined, MenuUnfoldOutlined, PushpinOutlined, PushpinFilled } from "@ant-design/icons";
 
-const { Sider, Header, Content } = Layout;
+const { Sider, Content } = Layout;
 const { Text } = Typography;
 
 export default function TareksLayout({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState<boolean>(false);
+  const [pinned, setPinned] = useState<boolean>(false);
+
+  const showKalemIslemleri =
+    !!pathname &&
+    /\/tareks\/dosya\/[^/]+\/kalemler\/(edit|fill)(\/)?$/i.test(pathname);
+
+  // load persisted states
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem("tareks.sider.collapsed");
+      if (v != null) setCollapsed(v === "1");
+      const pin = localStorage.getItem("tareks.sider.pinned");
+      if (pin != null) setPinned(pin === "1");
+    } catch {}
+  }, []);
+
+  // persist states
+  useEffect(() => {
+    try { localStorage.setItem("tareks.sider.collapsed", collapsed ? "1" : "0"); } catch {}
+  }, [collapsed]);
+  useEffect(() => {
+    try { localStorage.setItem("tareks.sider.pinned", pinned ? "1" : "0"); } catch {}
+  }, [pinned]);
+
   return (
     <Layout style={{ minHeight: "100vh" }}>
       <Sider
-        width={240}
         theme="light"
-        className="tareks-sider"
-        style={{ padding: 12, display: "flex", flexDirection: "column", gap: 16 }}
+        width={240}
+        collapsedWidth={60}
+        collapsible
+        trigger={null}
+        collapsed={collapsed}
+        breakpoint="lg"
+        onBreakpoint={(broken) => {
+          // küçük ekranda sabitli değilse otomatik kapan
+          if (broken && !pinned) setCollapsed(true);
+        }}
+        className={`tareks-sider ${collapsed ? "collapsed" : ""} ${pinned ? "pinned" : ""}`}
+        style={{
+          padding: 12,
+          paddingBottom: 56, // alttaki kontrol barı için boşluk
+          display: "flex",
+          flexDirection: "column",
+          gap: 12,
+          position: "relative"
+        }}
       >
-        <div style={{ display: "grid", gap: 6 }}>
-          <div className="tareks-sider-logo">TP</div>
-          <Text className="tareks-sider-title">Tareks Portal</Text>
-          <Text type="secondary" className="tareks-sider-sub">Hizli erisim menusu</Text>
-        </div>
+        {/* Marka – sadece açıkken metin göster */}
+        {!collapsed && (
+          <div style={{ padding: "6px 6px" }}>
+            <Text className="tareks-sider-title">Üniversal Eğitim ve Danışmanlık A.Ş.</Text>
+          </div>
+        )}
 
-        <nav style={{ display: "grid", gap: 8 }}>
-          <Link href="/tareks" className="tareks-menu-link">Tareks Listesi</Link>
+        {/* Menü */}
+        <nav style={{ display: "grid", gap: 6 }}>
+          <a href="/tareks" className="tareks-menu-link">
+            <span className="icon">📄</span>
+            <span className="label">Tareks Listesi</span>
+          </a>
         </nav>
 
-        <div style={{ marginTop: 12 }}>
-          <Text className="tareks-section-label" type="secondary">
-            Kalem islemleri
-          </Text>
+        {/* Kalem İşlemleri alanı – sadece edit/fill */}
+        {showKalemIslemleri && <div id="sidebar-aux" className="tareks-sidebar-aux" />}
+
+        <div style={{ flex: 1 }} />
+
+        {/* Alt sabit kontrol çubuğu */}
+        <div className="sider-controls">
+          <Tooltip title={collapsed ? "Menüyü aç" : "Menüyü kapa"}>
+            <Button
+              type="text"
+              onClick={() => setCollapsed((c) => !c)}
+              icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+            />
+          </Tooltip>
+
+          <Button
+            className="pin-btn"
+            type="text"
+            onClick={() => setPinned((p) => !p)}
+            icon={pinned ? <PushpinFilled /> : <PushpinOutlined />}
+          >
+            <span className="label">{pinned ? "Sabit" : "Sabitle"}</span>
+          </Button>
         </div>
-        <div id="sidebar-aux" className="tareks-sidebar-aux" />
       </Sider>
 
       <Layout>
-        <Header
-          style={{
-            background: "#ffffff",
-            borderBottom: "1px solid #e5e7eb",
-            height: "auto",
-            padding: "12px 24px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <Text className="tareks-header-title">Tareks</Text>
-          <Text type="secondary"></Text>
-        </Header>
-        <Content style={{ padding: 24, background: "#f8fafc" }}>
-          <div style={{ maxWidth: 1200, margin: "0 auto", width: "100%" }}>{children}</div>
+        {/* Header kaldırıldı */}
+        <Content style={{ padding: 12, background: "#f8fafc" }}>
+          {children}
         </Content>
       </Layout>
     </Layout>

@@ -3,8 +3,8 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
-  --font-family-base: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-  --font-size-base: 11px;
+  --font-inter: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  --app-font-size: 11px;
   --font-weight-regular: 400;
 }
 
@@ -21,16 +21,17 @@ body {
   margin: 0;
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-family-base);
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-regular);
+  font-family: var(--font-inter);
+  font-size: var(--app-font-size);
+  line-height: 1.35;
+  -webkit-font-smoothing: antialiased;
 }
 
 /* Allow horizontal scrolling; table containers will control overflow */
 body, html {
   overflow-x: auto;
-  font-family: var(--font-family-base);
-  font-size: var(--font-size-base);
+  font-family: var(--font-inter);
+  font-size: var(--app-font-size);
   font-weight: var(--font-weight-regular);
 }
 
@@ -201,20 +202,28 @@ main, main > section, #__next > main {
 }
 .tareks-sider-title {
   font-size: 11px;
-  font-weight: 400;
+  font-weight: 600;
   color: #0f172a;
+  line-height: 1.2;
 }
 .tareks-sider-sub {
   font-size: 11px;
   color: #64748b;
 }
 .tareks-menu-link {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   padding: 6px 10px;
   border-radius: 6px;
   color: #0f172a;
   text-decoration: none;
   transition: background 140ms ease;
+}
+.tareks-menu-link .icon {
+  width: 22px;
+  text-align: center;
+  flex: 0 0 22px;
 }
 .tareks-menu-link:hover,
 .tareks-menu-link:focus-visible {
@@ -241,10 +250,26 @@ main, main > section, #__next > main {
   border-radius: 8px;
   padding: 8px;
 }
+
+/* Sidebar: Kalem işlemleri alanı boşsa görünmesin */
+.tareks-sidebar-aux:empty {
+  display: none !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+}
+
+/* İçerik geldiğinde normal boşluk */
+.tareks-sidebar-aux {
+  margin-top: 8px;
+}
+
 .tareks-header-title {
   font-size: 11px;
   font-weight: 400;
   color: #0f172a;
+  margin-left: 4px;
 }
 /* Tareks list page layout helpers */
 .filter-row {
@@ -305,3 +330,98 @@ main, main > section, #__next > main {
   display: block;
   color: #0f172a;
 }
+
+/* Ant Design temel override'ları (11px’e indir) */
+.ant-typography,
+.ant-table,
+.ant-table-cell,
+.ant-btn,
+.ant-input,
+.ant-select,
+.ant-select-selector,
+.ant-select-item,
+.ant-form-item-label > label,
+.ant-modal-title,
+.ant-popover,
+.ant-dropdown-menu,
+.ant-menu,
+.ant-tag {
+  font-size: var(--app-font-size);
+  font-family: var(--font-inter);
+}
+
+.ant-btn-sm,
+.ant-input-sm,
+.ant-select-single .ant-select-selector {
+  font-size: var(--app-font-size);
+}
+
+/* İsteğe bağlı: başlıklar biraz daha büyük kalsın */
+h1 { font-size: 1.9rem; }
+h2 { font-size: 1.55rem; }
+h3 { font-size: 1.3rem; }
+h4 { font-size: 1.15rem; }
+h5, h6 { font-size: 1rem; }
+
+/* Küçük tablo ve form sıkılaştırma */
+.ant-table-tbody > tr > td,
+.ant-table-thead > tr > th {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+.ant-form-item {
+  margin-bottom: 12px;
+}
+
+/* Sider içi toggle butonu */
+.sider-toggle {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  border-radius: 6px;
+  color: #0f172a;
+}
+.tareks-sider.collapsed .sider-toggle { right: 6px; }
+
+/* Marka metni – TP logosu kaldırıldı */
+.tareks-sider-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+/* Collapse olduğunda menü metinlerini gizle */
+.tareks-sider.collapsed .tareks-menu-link .label { display: none; }
+.tareks-sider.collapsed .tareks-menu-link { justify-content: center; }
+
+/* İçerik ve sol menü üst hizasını eşitle (header kaldırıldı) */
+.ant-layout > .ant-layout { /* iç layout */
+  background: #f8fafc !important;
+}
+
+/* Sider alt kontrol çubuğu (buton + sabitle) */
+.sider-controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid #e2e8f0;
+  background: #f1f5f9;
+}
+.sider-controls .pin-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 6px;
+  color: #0f172a;
+}
+/* Kapalıyken sadece ikonlar kalsın (metin gizle) */
+.tareks-sider.collapsed .sider-controls .label { display: none; }
