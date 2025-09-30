@@ -36,6 +36,9 @@ export default function TareksLayout({ children }: { children: ReactNode }) {
     try { localStorage.setItem("tareks.sider.pinned", pinned ? "1" : "0"); } catch {}
   }, [pinned]);
 
+  // Detay (dosya) sayfası: /tareks/dosya/[id]
+  const isDosyaPage = !!pathname && /^\/tareks\/dosya\/[^/]+\/?$/.test(pathname);
+
   return (
     <Layout style={{ minHeight: "100vh" }}>
       <Sider
@@ -46,50 +49,40 @@ export default function TareksLayout({ children }: { children: ReactNode }) {
         trigger={null}
         collapsed={collapsed}
         breakpoint="lg"
-        onBreakpoint={(broken) => {
-          // küçük ekranda sabitli değilse otomatik kapan
-          if (broken && !pinned) setCollapsed(true);
-        }}
+        onBreakpoint={(broken) => broken && setCollapsed(true)}
         className={`tareks-sider ${collapsed ? "collapsed" : ""} ${pinned ? "pinned" : ""}`}
         style={{
           padding: 12,
-          paddingBottom: 56, // alttaki kontrol barı için boşluk
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-          position: "relative"
+          height: "100vh",        // SIDER sabit viewport yüksekliği
+          position: "relative",   // alt bar için referans
+          overflow: "hidden",     // iç scroll'u aşağıdaki wrapper alır
+          paddingBottom: 56       // alt bar yüksekliği kadar iç boşluk
         }}
       >
-        {/* Marka – sadece açıkken metin göster */}
-        {!collapsed && (
-          <div style={{ padding: "6px 6px" }}>
-            <Text className="tareks-sider-title">Üniversal Eğitim ve Danışmanlık A.Ş.</Text>
-          </div>
-        )}
+        <div className="sider-inner">
+          {!collapsed && (
+            <div style={{ padding: "6px 6px" }}>
+              <Text className="tareks-sider-title">Üniversal Eğitim ve Danışmanlık A.Ş.</Text>
+            </div>
+          )}
 
-        {/* Menü */}
-        <nav style={{ display: "grid", gap: 6 }}>
-          <a href="/tareks" className="tareks-menu-link">
-            <span className="icon">📄</span>
-            <span className="label">Tareks Listesi</span>
-          </a>
-        </nav>
+          <nav style={{ display: "grid", gap: 6 }}>
+            <a href="/tareks" className="tareks-menu-link">
+              <span className="icon">📄</span>
+              <span className="label">Tareks Listesi</span>
+            </a>
+          </nav>
 
-        {/* Kalem İşlemleri alanı – sadece edit/fill */}
-        {showKalemIslemleri && <div id="sidebar-aux" className="tareks-sidebar-aux" />}
+          {showKalemIslemleri && <div id="sidebar-aux" className="tareks-sidebar-aux" />}
+        </div>
 
-        <div style={{ flex: 1 }} />
-
-        {/* Alt sabit kontrol çubuğu */}
+        {/* Alt sabit kontrol çubuğu – her zaman görünür */}
         <div className="sider-controls">
-          <Tooltip title={collapsed ? "Menüyü aç" : "Menüyü kapa"}>
-            <Button
-              type="text"
-              onClick={() => setCollapsed((c) => !c)}
-              icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-            />
-          </Tooltip>
-
+          <Button
+            type="text"
+            onClick={() => setCollapsed((c) => !c)}
+            icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+          />
           <Button
             className="pin-btn"
             type="text"
@@ -102,8 +95,10 @@ export default function TareksLayout({ children }: { children: ReactNode }) {
       </Sider>
 
       <Layout>
-        {/* Header kaldırıldı */}
-        <Content style={{ padding: 12, background: "#f8fafc" }}>
+        <Content
+          className={`tareks-content ${isDosyaPage ? "tareks-content--dosya" : ""}`}
+          style={{ padding: 12, background: "#f8fafc" }}
+        >
           {children}
         </Content>
       </Layout>

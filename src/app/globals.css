@@ -401,27 +401,42 @@ h5, h6 { font-size: 1rem; }
   background: #f8fafc !important;
 }
 
-/* Sider alt kontrol çubuğu (buton + sabitle) */
+/* Alt kontrol çubuğu: absolute + Sider paddingBottom ile her sayfada altta kalır */
 .sider-controls {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  left: 12px;          /* Sider padding'i ile hizala */
+  right: 12px;
+  bottom: 12px;
   padding: 8px;
   display: flex;
   align-items: center;
   gap: 8px;
   border-top: 1px solid #e2e8f0;
   background: #f1f5f9;
+  z-index: 5;
 }
-.sider-controls .pin-btn {
-  flex: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border-radius: 6px;
-  color: #0f172a;
+
+/* Sider iç scroll alanı: içerik taşarsa sadece burada scroll olur */
+.tareks-sider .sider-inner {
+  height: 100%;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
-/* Kapalıyken sadece ikonlar kalsın (metin gizle) */
+
+/* Kapalıyken metni gizle */
 .tareks-sider.collapsed .sider-controls .label { display: none; }
+/* Detay (dosya) sayfasında üstteki butonları sol başlıktaki hizaya indir */
+.tareks-content--dosya {
+  /* Sider’daki marka bloğuna denk gelecek şekilde birkaç px daha aşağıdan başlat */
+  padding-top: 20px !important; /* gerekirse 18–22 aralığında ince ayar yapın */
+}
+
+/* İsteğe bağlı: ilk satırdaki buton/space dikey ortalansın */
+.tareks-content--dosya .ant-space,
+.tareks-content--dosya .ant-space-compact,
+.tareks-content--dosya .ant-breadcrumb {
+  align-items: center;
+}
+
