@@ -411,8 +411,96 @@ export default function KalemlerEditPage() {
     } catch { /* no-op */ }
   }
 
+  // +++ NEW: Excel export helper +++
+  async function exportToExcel() {
+    try {
+      if (!filteredRows.length) {
+        message.warning("İndirilecek veri yok");
+        return;
+      }
+
+      message.loading({ key: "xlsx", content: "Excel hazırlanıyor..." });
+
+      // Dynamic import (better for bundle size)
+      const XLSX = await import("xlsx"); // typeof import("xlsx")
+
+      // Build data with only visible columns and formatted dates
+      const headers = visibleKeys;
+      const data = filteredRows.map((r) => {
+        const o: Record<string, unknown> = {};
+        for (const k of headers) {
+          const val = r[k];
+          const d = isDateKey(k) ? parseDate(val) : null;
+          o[k] = d ? formatDDMMYYYY(d) : (val ?? "");
+        }
+        return o;
+      });
+
+      const ws = XLSX.utils.json_to_sheet(data, { header: headers });
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Detay");
+      const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+      const blob = new Blob([wbout], {
+        type:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+
+      const fname = `Tareks_${masterId}_${new Date().toISOString().slice(0,10)}.xlsx`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fname;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+
+      message.success({ key: "xlsx", content: "Excel indirildi" });
+    } catch (err: unknown) {
+      message.error({ key: "xlsx", content: "Excel oluşturulamadı" });
+      // Optional CSV fallback (no dependency)
+      try {
+        const headers = visibleKeys;
+        const csv =
+          headers.join(";") +
+          "\n" +
+          filteredRows
+            .map((r) =>
+              headers
+                .map((k) => {
+                  const v = r[k];
+                  const d = isDateKey(k) ? parseDate(v) : null;
+                  const cell = d ? formatDDMMYYYY(d) : (v ?? "");
+                  const s = String(cell).replace(/"/g, '""');
+                  return `"${s}"`;
+                })
+                .join(";")
+            )
+            .join("\n");
+
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `Tareks_${masterId}_${new Date().toISOString().slice(0,10)}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        message.info("Excel yerine CSV indirildi");
+      } catch {
+        // ignore
+      }
+    }
+  }
+  // +++ END NEW +++
+
   // İndirme butonları için örnek handler
   async function handleDownload(kind: "zip" | "xml" | "xlsx") {
+    if (kind === "xlsx") {
+      await exportToExcel();
+      return;
+    }
     try {
       message.loading({ content: "İndiriliyor...", key: "dl" });
       // TODO: gerçek endpoint ile değiştirin
