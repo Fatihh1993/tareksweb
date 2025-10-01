@@ -421,8 +421,8 @@ export default function KalemlerEditPage() {
 
       message.loading({ key: "xlsx", content: "Excel hazırlanıyor..." });
 
-      // Dynamic import (better for bundle size)
-      const XLSX = await import("xlsx"); // typeof import("xlsx")
+      // Dynamic import – browser ESM build with proper typings
+      const XLSX = (await import("xlsx/xlsx.mjs")).default;
 
       // Build data with only visible columns and formatted dates
       const headers = visibleKeys;
