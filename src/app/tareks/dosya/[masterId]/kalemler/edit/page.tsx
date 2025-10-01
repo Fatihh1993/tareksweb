@@ -501,6 +501,39 @@ export default function KalemlerEditPage() {
       await exportToExcel();
       return;
     }
+    if (kind === "xml") {
+      try {
+        message.loading({ content: "XML hazırlanıyor...", key: "xml" });
+
+        const res = await fetch(`/api/tareks/xml?masterId=${encodeURIComponent(masterId)}`, { cache: "no-store" });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          throw new Error(j?.error || "XML indirilemedi");
+        }
+        const xmlText = await res.text();
+
+        // Dosya adı: departman + referans (yoksa masterId)
+        const depart = scanForValue(rows, ["departmankisakod", "departman", "departmanKisaKod"]) || "";
+        const ref = scanForValue(rows, ["referansno", "refid", "ref"]) || masterId;
+        const fileName = `TareksXML-${depart}${ref}.xml`;
+
+        const blob = new Blob([xmlText], { type: "application/xml;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+
+        message.success({ content: "XML indirildi", key: "xml" });
+      } catch (err: unknown) {
+        message.error({ content: err instanceof Error ? err.message : "XML oluşturulamadı", key: "xml" });
+      }
+      return;
+    }
+
     try {
       message.loading({ content: "İndiriliyor...", key: "dl" });
       // TODO: gerçek endpoint ile değiştirin
