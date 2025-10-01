@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
+    "dev:https": "next dev --turbopack --experimental-https",
+    "dev:https:cert": "next dev --turbopack --experimental-https --experimental-https-key ./.cert/localhost-key.pem --experimental-https-cert ./.cert/localhost-cert.pem",
     "build": "next build --turbopack",
     "start": "next start",
     "lint": "eslint"
@@ -13,6 +15,8 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/mssql": "^9.1.8",
     "antd": "^5.27.2",
+    "archiver": "^7.0.1",
+    "basic-ftp": "^5.0.5",
     "bcrypt": "^6.0.0",
     "jsonwebtoken": "^9.0.2",
     "kysely": "^0.28.5",
@@ -24,6 +28,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
+    "@types/archiver": "^6.0.3",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

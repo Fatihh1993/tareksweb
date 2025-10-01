@@ -183,6 +183,7 @@ export default function TareksListPage() {
         render: (_: unknown, record: Row) => {
           const id = getMasterId(record);
           const ref = getRef(record);
+          const beyannameid = String(record["beyannameid"] ?? record["BeyannameId"] ?? "");
           const disabled = !id;
 
           // Üst bilgi alanlarını URL’e ekle (detay sayfasında yedek olarak kullanılıyor)
@@ -194,7 +195,7 @@ export default function TareksListPage() {
 
           const href = disabled
             ? undefined
-            : `/tareks/dosya/${encodeURIComponent(id)}/kalemler/edit?ref=${encodeURIComponent(ref || "")}&firma=${firma}&durum=${d}&sube=${sube}&belgetur=${belgetur}&yil=${yil}`;
+            : `/tareks/dosya/${encodeURIComponent(id)}/kalemler/edit?ref=${encodeURIComponent(ref || "")}&firma=${firma}&durum=${d}&sube=${sube}&belgetur=${belgetur}&yil=${yil}${beyannameid ? `&beyannameid=${encodeURIComponent(beyannameid)}` : ""}`;
 
           return (
             <Button type="link" disabled={disabled} href={href}>

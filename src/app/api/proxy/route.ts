@@ -9,6 +9,9 @@ const allowedHosts = [
   'eortak.dtm.gov.tr',
 ];
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 function isAllowed(url: URL) {
   return allowedHosts.includes(url.hostname);
 }
@@ -194,7 +197,7 @@ export async function GET(req: Request) {
             body = body.replace(re, (m: string, p1: string) => {
               const path = p1 || '';
               const safe = encodeURIComponent(`https://${host}${path}`);
-              return `/api/proxy?url=${safe}`;
+              return `/api/proxy?force=native&url=${safe}`;
             });
           }
           return new NextResponse(body, { status: native.status || 200, headers: { 'content-type': 'text/html; charset=utf-8' } });
@@ -242,7 +245,7 @@ export async function GET(req: Request) {
       body = body.replace(re, (m: string, p1: string) => {
         const path = p1 || '';
         const safe = encodeURIComponent(`https://${host}${path}`);
-        return `/api/proxy?url=${safe}`;
+        return `/api/proxy?force=native&url=${safe}`;
       });
     }
 

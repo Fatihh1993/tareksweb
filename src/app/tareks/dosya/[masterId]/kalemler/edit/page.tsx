@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation"; // + useRouter
-import { Button, Card, Input, Space, Table, Tag, Modal, Form, DatePicker, message, Select, Popconfirm } from "antd";
-import type { ColumnsType, ColumnType } from "antd/es/table";
+import { Button, Card, Input, Table, Tag, Modal, Form, DatePicker, message, Select, Popconfirm, Space, Divider, Typography, Progress } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import dayjs, { Dayjs } from "dayjs";
 // import { FormOutlined, FileZipOutlined, CodeOutlined, FileExcelOutlined } from "@ant-design/icons"; // <-- kaldırıldı
 
@@ -68,6 +68,16 @@ export default function KalemlerEditPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Arsiv modal state
+  const [arsivOpen, setArsivOpen] = useState(false);
+  const [arsivLoading, setArsivLoading] = useState(false);
+  const [arsivRows, setArsivRows] = useState<Row[]>([]);
+  const [arsivError, setArsivError] = useState<string | null>(null);
+  const [arsivSelectedKeys, setArsivSelectedKeys] = useState<React.Key[]>([]);
+  const [dlBusy, setDlBusy] = useState(false);
+  const [dlDone, setDlDone] = useState(0);
+  const [dlTotal, setDlTotal] = useState(0);
+  const [zipBusy, setZipBusy] = useState(false);
 
   // simple column filters
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
@@ -104,6 +114,72 @@ export default function KalemlerEditPage() {
       alive = false;
     };
   }, [masterId]);
+
+  // Robust beyannameid source: query -> rows[0]
+  const beyannameId = useMemo(() => {
+    const fromQS = (searchParams.get("beyannameid") || "").trim();
+    if (fromQS) return fromQS;
+    const src = (rows[0] as Row | undefined) || {};
+    const v = src["beyannameid"] ?? src["BeyannameId"] ?? src["BEYANNAMEID"];
+    return v ? String(v) : "";
+  }, [searchParams, rows]);
+
+  async function openArsivModal() {
+    if (!beyannameId) {
+      message.warning("Bu dosyada beyannameid bulunamadı");
+      return;
+    }
+    setArsivOpen(true);
+    setArsivError(null);
+    setArsivLoading(true);
+    try {
+      const res = await fetch(`/api/tareks/arsiv/list?beyannameid=${encodeURIComponent(beyannameId)}&top=100`, { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || data?.detail || "Arşiv listesi alınamadı");
+      setArsivRows((data.rows as Row[]) || []);
+      setArsivSelectedKeys([]);
+    } catch (e) {
+      setArsivError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setArsivLoading(false);
+    }
+  }
+
+  const downloadArsivItems = useCallback(async (items: Row[]) => {
+    if (!beyannameId) {
+      message.warning('BeyannameId yok');
+      return;
+    }
+    setDlBusy(true);
+    setDlDone(0);
+    setDlTotal(items.length);
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      const arsivid = String(it['arsivid'] ?? '');
+      if (!arsivid) continue;
+      const url = `/api/tareks/arsiv/download?beyannameid=${encodeURIComponent(beyannameId)}&arsivid=${encodeURIComponent(arsivid)}`;
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error((await res.text()) || 'İndirme hatası');
+        const blob = await res.blob();
+        const cd = res.headers.get('Content-Disposition') || '';
+        const m = cd.match(/filename=\"?([^\";]+)\"?/i);
+        const fn = m?.[1] || `${String(it['ad'] ?? 'arsiv')}.pdf`;
+        const a = document.createElement('a');
+        const href = URL.createObjectURL(blob);
+        a.href = href;
+        a.download = fn;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(href);
+      } catch (e) {
+        console.error('download error', e);
+      }
+      setDlDone((n) => n + 1);
+    }
+    setTimeout(() => { setDlBusy(false); }, 300);
+  }, [beyannameId]);
 
   const filteredRows = useMemo(() => {
     const active = Object.entries(columnFilters).filter(([, v]) => v.trim());
@@ -177,45 +253,9 @@ export default function KalemlerEditPage() {
     return `${dd}/${mm}/${yyyy}`;
   }
 
-  const columns = useMemo<ColumnsType<Row>>(() => {
-    const keys = Array.from(
-      rows.reduce<Set<string>>((set, r) => {
-        Object.keys(r).forEach((k) => {
-          if (!HIDE_KEYS.has(k)) set.add(k);
-        });
-        return set;
-      }, new Set<string>())
-    );
+  // onEdit will be defined after 'form' is declared
 
-    const cols: ColumnsType<Row> = keys.map((k) => {
-      const dateCol = isDateKey(k);
-      return {
-        title: headerWithFilter(k, k),
-        dataIndex: k,
-        key: k,
-        // width: 160,  // <-- kaldırıldı; satırı kırıyordu
-        render: (v: unknown) => {
-          const d = parseDate(v);
-          if (dateCol && d) return <span>{formatDDMMYYYY(d)}</span>;
-          if (!dateCol && d && typeof v === "string") return <span>{formatDDMMYYYY(d)}</span>;
-          return <span>{String(v ?? "")}</span>;
-        },
-      };
-    });
-
-    cols.push({
-      title: headerOnly("İşlemler"),
-      key: "actions",
-      fixed: "right",
-      width: 150,
-      render: (_: unknown, record: Row) => (
-        <Button size="small" onClick={() => onEdit(record)}>
-          Düzenle
-        </Button>
-      ),
-    });
-    return cols;
-  }, [rows, headerWithFilter, headerOnly]);
+  // columns will be defined after onEdit is available
 
   // Arama sayfasındaki renkler
   const durumColors: Record<string, string> = {
@@ -358,6 +398,62 @@ export default function KalemlerEditPage() {
   const [editKey, setEditKey] = useState<string | null>(null);
   const [form] = Form.useForm<FormValues>(); // <-- RowPatch yerine FormValues
 
+  const onEdit = useCallback((row: Row) => {
+    const key = getRowKey(row);
+    setEditKey(key);
+    const init: Partial<FormValues> = {};
+    Object.entries(row as Record<string, unknown>).forEach(([k, v]) => {
+      if (HIDE_KEYS.has(k)) return;
+      if (isDateKey(k)) {
+        const d = parseDate(v);
+        init[k] = d ? dayjs(d) : null;
+      } else {
+        init[k] = (v as string | number | null) ?? null;
+      }
+    });
+    form.setFieldsValue(init);
+    setEditOpen(true);
+  }, [form]);
+
+  const columns = useMemo<ColumnsType<Row>>(() => {
+    const keys = Array.from(
+      rows.reduce<Set<string>>((set, r) => {
+        Object.keys(r).forEach((k) => {
+          if (!HIDE_KEYS.has(k)) set.add(k);
+        });
+        return set;
+      }, new Set<string>())
+    );
+
+    const cols: ColumnsType<Row> = keys.map((k) => {
+      const dateCol = isDateKey(k);
+      return {
+        title: headerWithFilter(k, k),
+        dataIndex: k,
+        key: k,
+        render: (v: unknown) => {
+          const d = parseDate(v);
+          if (dateCol && d) return <span>{formatDDMMYYYY(d)}</span>;
+          if (!dateCol && d && typeof v === "string") return <span>{formatDDMMYYYY(d)}</span>;
+          return <span>{String(v ?? "")}</span>;
+        },
+      };
+    });
+
+    cols.push({
+      title: headerOnly("İşlemler"),
+      key: "actions",
+      fixed: "right",
+      width: 150,
+      render: (_: unknown, record: Row) => (
+        <Button size="small" onClick={() => onEdit(record)}>
+          Düzenle
+        </Button>
+      ),
+    });
+    return cols;
+  }, [rows, headerWithFilter, headerOnly, onEdit]);
+
   // Görünen kolon anahtarları (formu da aynı sırayla kurmak için)
   const visibleKeys = useMemo(() => {
     return Array.from(
@@ -377,22 +473,7 @@ export default function KalemlerEditPage() {
     return <Input />;
   }
 
-  function onEdit(row: Row) {
-    const key = getRowKey(row);
-    setEditKey(key);
-    const init: Partial<FormValues> = {}; // <-- FormValues
-    Object.entries(row as Record<string, unknown>).forEach(([k, v]) => {
-      if (HIDE_KEYS.has(k)) return;
-      if (isDateKey(k)) {
-        const d = parseDate(v);
-        init[k] = d ? dayjs(d) : null;
-      } else {
-        init[k] = (v as string | number | null) ?? null;
-      }
-    });
-    form.setFieldsValue(init); // <-- artık hata yok
-    setEditOpen(true);
-  }
+  // (moved below after form)
 
   async function handleSave() {
     try {
@@ -456,7 +537,7 @@ export default function KalemlerEditPage() {
       URL.revokeObjectURL(url);
 
       message.success({ key: "xlsx", content: "Excel indirildi" });
-    } catch (err: unknown) {
+    } catch {
       message.error({ key: "xlsx", content: "Excel oluşturulamadı" });
       // Optional CSV fallback (no dependency)
       try {
@@ -537,7 +618,7 @@ export default function KalemlerEditPage() {
     try {
       message.loading({ content: "İndiriliyor...", key: "dl" });
       // TODO: gerçek endpoint ile değiştirin
-      const url = `/api/tareks/exports?masterId=${encodeURIComponent(masterId)}&format=${kind}`;
+  // const url = `/api/tareks/exports?masterId=${encodeURIComponent(masterId)}&format=${kind}`;
       // const res = await fetch(url); const blob = await res.blob(); saveAs(blob, `dosya.${kind}`);
       message.success({ content: "İndirme hazır (örnek).", key: "dl" });
     } catch {
@@ -725,7 +806,7 @@ export default function KalemlerEditPage() {
           Kalemleri doldur
         </Button>
 
-        <Button size="small" icon={emojiIcon("📦")} onClick={() => handleDownload("zip")}>
+        <Button size="small" icon={emojiIcon("📦")} onClick={openArsivModal}>
           Arşiv indir
         </Button>
         <Button size="small" icon={emojiIcon("🧾")} onClick={() => handleDownload("xml")}>
@@ -792,6 +873,111 @@ export default function KalemlerEditPage() {
             ))}
           </div>
         </Form>
+      </Modal>
+
+      {/* Arşiv Modal */}
+      <Modal
+        open={arsivOpen}
+        onCancel={() => setArsivOpen(false)}
+        title="Arşiv"
+        footer={null}
+        width={820}
+        destroyOnClose
+      >
+        {arsivError && <div className="text-danger">{arsivError}</div>}
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <Typography.Title level={5} style={{ margin: 0 }}>Arşiv Dosyaları</Typography.Title>
+            <Typography.Text type="secondary">Seçili: {arsivSelectedKeys.length} / Toplam: {arsivRows.length}</Typography.Text>
+          </div>
+          <Space wrap>
+            <Button size="small" onClick={() => setArsivSelectedKeys(arsivRows.map(r => String(r['arsivid']) ))} disabled={!arsivRows.length}>Tümünü seç</Button>
+            <Button size="small" onClick={() => setArsivSelectedKeys([])} disabled={!arsivSelectedKeys.length}>Seçimi temizle</Button>
+            <Divider type="vertical" />
+            <Button size="small" disabled={!arsivSelectedKeys.length || dlBusy || zipBusy} onClick={async () => {
+              const selected = arsivRows.filter(r => arsivSelectedKeys.includes(String(r['arsivid'])));
+              await downloadArsivItems(selected);
+            }}>Seçili PDF indir</Button>
+            <Button size="small" disabled={!arsivRows.length || dlBusy || zipBusy} onClick={async () => {
+              await downloadArsivItems(arsivRows);
+            }}>Tümü PDF indir</Button>
+            <Button size="small" type="primary" disabled={!arsivSelectedKeys.length || dlBusy || zipBusy}
+              onClick={async () => {
+                try {
+                  setZipBusy(true);
+                  const ids = arsivSelectedKeys.map(String).join(',');
+                  const url = `/api/tareks/arsiv/zip?beyannameid=${encodeURIComponent(beyannameId)}&ids=${encodeURIComponent(ids)}`;
+                  const res = await fetch(url);
+                  if (!res.ok) { message.error('Zip oluşturulamadı'); return; }
+                  const blob = await res.blob();
+                  const a = document.createElement('a');
+                  const href = URL.createObjectURL(blob);
+                  a.href = href;
+                  a.download = `arsiv_${beyannameId}.zip`;
+                  document.body.appendChild(a);
+                  a.click();
+                  a.remove();
+                  URL.revokeObjectURL(href);
+                } finally {
+                  setZipBusy(false);
+                }
+              }}
+            >Seçili ZIP</Button>
+            <Button size="small" type="primary" disabled={!arsivRows.length || dlBusy || zipBusy}
+              onClick={async () => {
+                try {
+                  setZipBusy(true);
+                  const ids = arsivRows.map(r => String(r['arsivid'])).join(',');
+                  const url = `/api/tareks/arsiv/zip?beyannameid=${encodeURIComponent(beyannameId)}&ids=${encodeURIComponent(ids)}`;
+                  const res = await fetch(url);
+                  if (!res.ok) { message.error('Zip oluşturulamadı'); return; }
+                  const blob = await res.blob();
+                  const a = document.createElement('a');
+                  const href = URL.createObjectURL(blob);
+                  a.href = href;
+                  a.download = `arsiv_${beyannameId}.zip`;
+                  document.body.appendChild(a);
+                  a.click();
+                  a.remove();
+                  URL.revokeObjectURL(href);
+                } finally {
+                  setZipBusy(false);
+                }
+              }}
+            >Tümü ZIP</Button>
+          </Space>
+        </div>
+        {(dlBusy || zipBusy) && (
+          <div className="mb-3">
+            {dlBusy ? (
+              <div>
+                <Typography.Text>PDF indiriliyor… {dlDone}/{dlTotal}</Typography.Text>
+                <Progress percent={dlTotal ? Math.round((dlDone / dlTotal) * 100) : 0} size="small" />
+              </div>
+            ) : (
+              <Typography.Text>ZIP hazırlanıyor…</Typography.Text>
+            )}
+          </div>
+        )}
+        <Table
+          size="small"
+          rowKey={(r) => String(r['arsivid'] ?? Math.random())}
+          loading={arsivLoading}
+          dataSource={arsivRows}
+          pagination={{ pageSize: 10 }}
+          scroll={{ y: 360, x: 'max-content' }}
+          rowSelection={{
+            selectedRowKeys: arsivSelectedKeys,
+            onChange: (keys) => setArsivSelectedKeys(keys),
+          }}
+          columns={[
+            { title: 'Ad', dataIndex: 'ad', key: 'ad' },
+            { title: 'Tarih', key: 'tarih', sorter: (a: Row, b: Row) => new Date(String(a['guncellemetarih'] ?? a['kayitgiristarih'] ?? 0)).getTime() - new Date(String(b['guncellemetarih'] ?? b['kayitgiristarih'] ?? 0)).getTime(), render: (_: unknown, it: Row) => String(it['guncellemetarih'] ?? it['kayitgiristarih'] ?? '') },
+            { title: 'İşlem', key: 'act', width: 120, render: (_: unknown, it: Row) => (
+              <Button size="small" disabled={dlBusy || zipBusy} onClick={async () => { await downloadArsivItems([it]); }}>İndir</Button>
+            )},
+          ]}
+        />
       </Modal>
 
       {/* Para İste Modal */}

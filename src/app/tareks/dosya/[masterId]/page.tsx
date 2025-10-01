@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useParams } from "next/navigation";
 import Link from "next/link";
-import { Button, Card, Space, Tag, Table, Input, Tooltip, message } from "antd";
+import { Button, Card, Space, Tag, Table, Input, Tooltip, message, Modal, Progress, Divider, Typography } from "antd";
 import type { ColumnsType, ColumnType } from "antd/es/table";
 
 type Row = Record<string, unknown>;
@@ -13,12 +13,22 @@ export default function DosyaDetayPage() {
   const searchParams = useSearchParams();
   const masterId = params?.masterId;
   const ref = searchParams.get("ref") || undefined;
+  const beyannameIdFromQuery = searchParams.get("beyannameid") || undefined;
 
   const [detailRows, setDetailRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchRow, setSearchRow] = useState<Row | null>(null);
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
+  const [arsivOpen, setArsivOpen] = useState(false);
+  const [arsivLoading, setArsivLoading] = useState(false);
+  const [arsivRows, setArsivRows] = useState<Row[]>([]);
+  const [arsivError, setArsivError] = useState<string | null>(null);
+  const [arsivSelectedKeys, setArsivSelectedKeys] = useState<React.Key[]>([]);
+  const [dlBusy, setDlBusy] = useState(false);
+  const [dlDone, setDlDone] = useState(0);
+  const [dlTotal, setDlTotal] = useState(0);
+  const [zipBusy, setZipBusy] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -129,6 +139,55 @@ export default function DosyaDetayPage() {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [editBuffer, setEditBuffer] = useState<Row>({});
 
+  // Central beyannameId source: prefer query -> searchRow -> detailRows
+  const beyannameId = useMemo(() => {
+    const fromQuery = beyannameIdFromQuery;
+    if (fromQuery && String(fromQuery).trim()) return String(fromQuery);
+    const fromSearch = searchRow?.["beyannameid"] ?? searchRow?.["BeyannameId"] ?? searchRow?.["BEYANNAMEID"];
+    if (fromSearch && String(fromSearch).trim()) return String(fromSearch);
+    const src = (detailRows[0] as Row | undefined) || {};
+    const fromDetail = src["beyannameid"] ?? src["BeyannameId"] ?? src["BEYANNAMEID"];
+    if (fromDetail && String(fromDetail).trim()) return String(fromDetail);
+    return "";
+  }, [beyannameIdFromQuery, searchRow, detailRows]);
+
+  // Helper: download array of archive items sequentially
+  const downloadArsivItems = useCallback(async (items: Row[]) => {
+    if (!beyannameId) {
+      message.warning('BeyannameId yok');
+      return;
+    }
+    setDlBusy(true);
+    setDlDone(0);
+    setDlTotal(items.length);
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      const arsivid = String(it['arsivid'] ?? '');
+      if (!arsivid) continue;
+      const url = `/api/tareks/arsiv/download?beyannameid=${encodeURIComponent(beyannameId)}&arsivid=${encodeURIComponent(arsivid)}`;
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error((await res.text()) || 'İndirme hatası');
+        const blob = await res.blob();
+        const cd = res.headers.get('Content-Disposition') || '';
+        const m = cd.match(/filename=\"?([^\";]+)\"?/i);
+        const fn = m?.[1] || `${String(it['ad'] ?? 'arsiv')}.pdf`;
+        const a = document.createElement('a');
+        const href = URL.createObjectURL(blob);
+        a.href = href;
+        a.download = fn;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(href);
+      } catch (e) {
+        console.error('download error', e);
+      }
+      setDlDone((n) => n + 1);
+    }
+    setTimeout(() => { setDlBusy(false); }, 300);
+  }, [beyannameId]);
+
   const headerWithFilter = useCallback(
     (label: string) => (
       <div className="col-header">
@@ -224,6 +283,27 @@ export default function DosyaDetayPage() {
     return cols;
   }, [detailRows, headerWithFilter, selectedKey, editBuffer]);
 
+  async function openArsivModal() {
+    const beyannameid = beyannameId;
+    if (!beyannameid) {
+      message.warning("Bu dosyada beyannameid bulunamadı");
+      return;
+    }
+    setArsivOpen(true);
+    setArsivError(null);
+    setArsivLoading(true);
+    try {
+      const res = await fetch(`/api/tareks/arsiv/list?beyannameid=${encodeURIComponent(beyannameid)}&top=100`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || data?.detail || "Arşiv listesi alınamadı");
+      setArsivRows((data.rows as Row[]) || []);
+    } catch (e) {
+      setArsivError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setArsivLoading(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <Card
@@ -271,6 +351,7 @@ export default function DosyaDetayPage() {
               Kalemleri doldur
             </Button>
           </Link>
+          <Button size="small" onClick={openArsivModal}>Arşiv indir</Button>
         </Space>
       </Card>
 
@@ -288,6 +369,109 @@ export default function DosyaDetayPage() {
           />
         </div>
       </Card>
+
+      <Modal
+        open={arsivOpen}
+        onCancel={() => setArsivOpen(false)}
+        title="Arşiv"
+        footer={null}
+        width={820}
+      >
+        {arsivError && <div className="text-danger">{arsivError}</div>}
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <Typography.Title level={5} style={{ margin: 0 }}>Arşiv Dosyaları</Typography.Title>
+            <Typography.Text type="secondary">Seçili: {arsivSelectedKeys.length} / Toplam: {arsivRows.length}</Typography.Text>
+          </div>
+          <Space wrap>
+            <Button size="small" onClick={() => setArsivSelectedKeys(arsivRows.map(r => String(r['arsivid']) ))} disabled={!arsivRows.length}>Tümünü seç</Button>
+            <Button size="small" onClick={() => setArsivSelectedKeys([])} disabled={!arsivSelectedKeys.length}>Seçimi temizle</Button>
+            <Divider type="vertical" />
+            <Button size="small" disabled={!arsivSelectedKeys.length || dlBusy || zipBusy} onClick={async () => {
+              const selected = arsivRows.filter(r => arsivSelectedKeys.includes(String(r['arsivid'])));
+              await downloadArsivItems(selected);
+            }}>Seçili PDF indir</Button>
+            <Button size="small" disabled={!arsivRows.length || dlBusy || zipBusy} onClick={async () => {
+              await downloadArsivItems(arsivRows);
+            }}>Tümü PDF indir</Button>
+            <Button size="small" type="primary" disabled={!arsivSelectedKeys.length || dlBusy || zipBusy}
+              onClick={async () => {
+                try {
+                  setZipBusy(true);
+                  const ids = arsivSelectedKeys.map(String).join(',');
+                  const url = `/api/tareks/arsiv/zip?beyannameid=${encodeURIComponent(beyannameId)}&ids=${encodeURIComponent(ids)}`;
+                  const res = await fetch(url);
+                  if (!res.ok) { message.error('Zip oluşturulamadı'); return; }
+                  const blob = await res.blob();
+                  const a = document.createElement('a');
+                  const href = URL.createObjectURL(blob);
+                  a.href = href;
+                  a.download = `arsiv_${beyannameId}.zip`;
+                  document.body.appendChild(a);
+                  a.click();
+                  a.remove();
+                  URL.revokeObjectURL(href);
+                } finally {
+                  setZipBusy(false);
+                }
+              }}
+            >Seçili ZIP</Button>
+            <Button size="small" type="primary" disabled={!arsivRows.length || dlBusy || zipBusy}
+              onClick={async () => {
+                try {
+                  setZipBusy(true);
+                  const ids = arsivRows.map(r => String(r['arsivid'])).join(',');
+                  const url = `/api/tareks/arsiv/zip?beyannameid=${encodeURIComponent(beyannameId)}&ids=${encodeURIComponent(ids)}`;
+                  const res = await fetch(url);
+                  if (!res.ok) { message.error('Zip oluşturulamadı'); return; }
+                  const blob = await res.blob();
+                  const a = document.createElement('a');
+                  const href = URL.createObjectURL(blob);
+                  a.href = href;
+                  a.download = `arsiv_${beyannameId}.zip`;
+                  document.body.appendChild(a);
+                  a.click();
+                  a.remove();
+                  URL.revokeObjectURL(href);
+                } finally {
+                  setZipBusy(false);
+                }
+              }}
+            >Tümü ZIP</Button>
+          </Space>
+        </div>
+        {(dlBusy || zipBusy) && (
+          <div className="mb-3">
+            {dlBusy ? (
+              <div>
+                <Typography.Text>PDF indiriliyor… {dlDone}/{dlTotal}</Typography.Text>
+                <Progress percent={dlTotal ? Math.round((dlDone / dlTotal) * 100) : 0} size="small" />
+              </div>
+            ) : (
+              <Typography.Text>ZIP hazırlanıyor…</Typography.Text>
+            )}
+          </div>
+        )}
+        <Table
+          size="small"
+          rowKey={(r) => String(r['arsivid'] ?? Math.random())}
+          loading={arsivLoading}
+          dataSource={arsivRows}
+          pagination={{ pageSize: 10 }}
+          scroll={{ y: 360, x: 'max-content' }}
+          rowSelection={{
+            selectedRowKeys: arsivSelectedKeys,
+            onChange: (keys) => setArsivSelectedKeys(keys),
+          }}
+          columns={[
+            { title: 'Ad', dataIndex: 'ad', key: 'ad' },
+            { title: 'Tarih', key: 'tarih', sorter: (a: Row, b: Row) => new Date(String(a['guncellemetarih'] ?? a['kayitgiristarih'] ?? 0)).getTime() - new Date(String(b['guncellemetarih'] ?? b['kayitgiristarih'] ?? 0)).getTime(), render: (_: unknown, it: Row) => String(it['guncellemetarih'] ?? it['kayitgiristarih'] ?? '') },
+            { title: 'İşlem', key: 'act', width: 120, render: (_: unknown, it: Row) => (
+              <Button size="small" disabled={dlBusy || zipBusy} onClick={async () => { await downloadArsivItems([it]); }}>İndir</Button>
+            )},
+          ]}
+        />
+      </Modal>
     </div>
   );
 }

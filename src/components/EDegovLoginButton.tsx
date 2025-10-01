@@ -29,9 +29,11 @@ export function EDegovLoginButton({
       try { console.warn("localStorage set failed for tareks.masterId", err); } catch {}
     }
 
-    // 2) Redirect URI (tercihen public HTTPS: ngrok / Cloudflare Tunnel / gerçek domain)
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const redirectBase = redirectHost ? redirectHost.replace(/\/$/, "") : origin;
+  // 2) Redirect URI (tercihen public HTTPS: ngrok / Cloudflare Tunnel / gerçek domain)
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const envRedirect = (process.env.NEXT_PUBLIC_REDIRECT_HOST || "").trim();
+  const configured = envRedirect || redirectHost || origin;
+  const redirectBase = configured.replace(/\/$/, "");
     const redirectUri = encodeURIComponent(`${redirectBase}/edv/callback`);
 
     // 3) CSRF için state & nonce üret (gerçekte backend'ten alıp doğrulamak daha güvenli)
